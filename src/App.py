@@ -1,10 +1,20 @@
-from flask import Flask
-from src.controllers.OpenAiController import openai_controller
-from flask_cors import CORS
+# main.py
+from src.services.Cloudinary.cloudinary_module import CloudinaryModule
+from io import BytesIO
 
-app = Flask(__name__)
-app.register_blueprint(openai_controller, url_prefix='/openai')
-CORS(app)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+def main():
+    cloudinary_module = CloudinaryModule()
+
+    # Example usage: upload an image
+    try:
+        with open('/Users/keyel/Documents/ChatBotNeurotry/src/phone.png', 'rb') as image_file:  # Replace with your image file name
+            image_stream = BytesIO(image_file.read())
+            result = cloudinary_module.cloudinary_service.upload_image(image_stream)
+            print(result)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+
+
+if __name__ == "__main__":
+    main()

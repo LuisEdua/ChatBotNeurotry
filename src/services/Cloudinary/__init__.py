@@ -1,13 +1,5 @@
-# __init__.py
-from .cloudinary import CloudinaryProvider, CloudinaryService
+# src/services/Cloudinary/__init__.py
 
-class CloudinaryModule:
-    def __init__(self, cloud_name: str, api_key: str, api_secret: str):
-        self.cloudinary_provider = CloudinaryProvider(cloud_name, api_key, api_secret)
-        self.cloudinary_service = CloudinaryService(self.cloudinary_provider)
-
-    def get_provider(self):
-        return self.cloudinary_provider
-
-    def get_service(self):
-        return self.cloudinary_service
+from .cloudinary_provider import get_cloudinary_config
+from .cloudinary_service import CloudinaryService
+from .cloudinary_module import CloudinaryModule
