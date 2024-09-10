@@ -1,14 +1,11 @@
 from flask import Flask
-from src.controllers.OpenAiController import openai_controller
-from src.controllers.GeminiController import gemini_controller
+from whatsapp.whatsapp_controller import whatsapp_controller
 from flask_cors import CORS
 
 app = Flask(__name__)
-app.register_blueprint(gemini_controller, url_prefix='/gemini')
-app.register_blueprint(openai_controller, url_prefix='/openai')
-
 CORS(app)
 
+app.register_blueprint(whatsapp_controller, url_prefix='/api/v1')
 
 if __name__ == "__main__":
     app.run(debug=True)
