@@ -8,6 +8,7 @@ from prisma import Prisma
 
 load_dotenv()
 
+
 class MessageEvaluated(BaseModel):
     is_welcome: bool
     want_to_buy: bool
@@ -16,11 +17,13 @@ class MessageEvaluated(BaseModel):
     catalog: Union[None, List[Dict[str, Union[str, int, float]]]]
     is_orders: bool
 
+
 class Product(BaseModel):
     id: str
     name: str
     quantity: int
     price: float
+
 
 class OpenAiService(Prisma):
     def __init__(self):
@@ -69,7 +72,8 @@ class OpenAiService(Prisma):
             return self.convert_to_json(response.choices[0].text)
         except Exception as error:
             print(error)
-            return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False, is_account_information=False, is_orders=False, catalog=None)
+            return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False,
+                                    is_account_information=False, is_orders=False, catalog=None)
 
     def convert_to_json(self, text: str) -> MessageEvaluated:
         cleaned_text = text.replace('```json', '').replace('```', '').strip()
@@ -97,7 +101,8 @@ class OpenAiService(Prisma):
             print(error)
             return []
 
-    async def generate_json_products_catalog(self, products_no_image: List[Dict[str, str]], products: List[Dict[str, str]]) -> Dict[str, Any]:
+    async def generate_json_products_catalog(self, products_no_image: List[Dict[str, str]],
+                                             products: List[Dict[str, str]]) -> Dict[str, Any]:
         prompt = f"""Voy a darte un prompt y quiero que me devuelvas **únicamente** un objeto JSON que me ayude a remplazar el contenido de un objeto JSON con un array de productos en la base de dataSource. Este es el arreglo de productos de la base de datos {json.dumps(products_no_image)}. Y este es un ejemplo de como debe ser el objeto JSON que debes devolver: {{
         "version": "5.0",
         "screens": [

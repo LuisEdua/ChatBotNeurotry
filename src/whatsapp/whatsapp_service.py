@@ -2,7 +2,7 @@ import os
 import json
 import crypto
 from typing import List, Any
-from stripe import Stripe
+import stripe as Stripe
 from src.services.db.connection import get_db_connection
 from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
@@ -17,9 +17,8 @@ from src.whatsapp.interfaces.register_response_interface import RegisterResponse
 from src.whatsapp.dtos.message import MessageDto
 
 class WhatsappService:
-    def __init__(self, google_ai_service: GoogleAiService, open_ai_service: OpenAiService, encrypt_service: EncryptationService, cloudinary_service: CloudinaryService):
-        self.google_ai_service = google_ai_service
-        self.open_ai_service = open_ai_service
+    def __init__(self, model, encrypt_service: EncryptationService, cloudinary_service: CloudinaryService):
+        self.model = model
         self.db_service = get_db_connection()
         self.encrypt_service = encrypt_service
         self.cloudinary_service = cloudinary_service
