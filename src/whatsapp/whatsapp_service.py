@@ -1,8 +1,7 @@
 import os
 import json
-import crypto
+import stripe
 from typing import List, Any
-import stripe as Stripe
 from src.services.db.connection import get_db_connection
 from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
@@ -16,13 +15,15 @@ from src.whatsapp.interfaces.interactive_message_interface import InteractiveMes
 from src.whatsapp.interfaces.register_response_interface import RegisterResponse
 from src.whatsapp.dtos.message import MessageDto
 
+# Configura la clave de API de Stripe
+stripe.api_key = os.getenv('STRIPE_SECRET')
+
 class WhatsappService:
     def __init__(self, model, encrypt_service: EncryptationService, cloudinary_service: CloudinaryService):
         self.model = model
         self.db_service = get_db_connection()
         self.encrypt_service = encrypt_service
         self.cloudinary_service = cloudinary_service
-        self.stripe = Stripe(os.getenv('STRIPE_SECRET'))
 
     def verify(self, verify_token: str, challenge: str):
         if verify_token == os.getenv('SECRET_WPP_TOKEN') and challenge:
@@ -79,7 +80,13 @@ class WhatsappService:
 
     async def handle_buy_product(self, message: MessageDto, products: List[dict]):
         line_items = [{"price_data": {"currency": "mxn", "product_data": {"name": product["name"]}, "unit_amount": round(product["price"] * 100)}, "quantity": product["quantity"]} for product in products]
-        session = await self.stripe.checkout.sessions.create(payment_intent_data={"metadata": {"orderId": "12345", "phone": message.from_}}, line_items=line_items, mode="payment", success_url="https://r945484c-3000.use2.devtunnels.ms/api/v1/whatsapp/payments/success", cancel_url="https://r945484c-3000.use2.devtunnels.ms/api/v1/whatsapp/payments/cancel")
+        session = await stripe.checkout.sessions.create(
+            payment_intent_data={"metadata": {"orderId": "12345", "phone": message.from_}},
+            line_items=line_items,
+            mode="payment",
+            success_url="https://r945484c-3000.use2.devtunnels.ms/api/v1/whatsapp/payments/success",
+            cancel_url="https://r945484c-3000.use2.devtunnels.ms/api/v1/whatsapp/payments/cancel"
+        )
         await send_message_fetch("En seguida enviamos el link para que puedas completar tu compra 🛍️", message.from_)
         await send_message_fetch(session.url, message.from_, True)
         await send_message_fetch("Este link tiene una duración de 24 horas, si no completas tu compra en ese tiempo, deberás solicitar uno nuevo 🕒", message.from_)
@@ -140,49 +147,20 @@ class WhatsappService:
         if not os.getenv('FACEBOOK_PRIVATE_KEY'):
             raise ValueError('Private key is empty. Please check your env variable "PRIVATE_KEY".')
         if not self.is_request_signature_valid(req):
-            return res.status(432).send()
-        try:
-            decrypted_request = self.encrypt_service.decrypt_request(req.data, os.getenv('FACEBOOK_PRIVATE_KEY'), os.getenv('FACEBOOK_PHRASE_PRIVATE_KEY'))
-        except Exception as err:
-            print(err)
-            if isinstance(err, self.encrypt_service.FlowEndpointException):
-                return res.status(400).send()
-            return res.status(500).send()
-        aes_key_buffer, initial_vector_buffer, decrypted_body = decrypted_request
-        print("💬 Decrypted Request:", decrypted_body)
-        screen_response = await get_next_screen(decrypted_body)
-        print("👉 Response to Encrypt:", screen_response)
-        res.send(self.encrypt_service.encrypt_response(screen_response, aes_key_buffer, initial_vector_buffer))
+            return res.status(432).send('Invalid signature.')
 
-    def is_request_signature_valid(self, req: Any):
-        if not os.getenv('FACEBOOK_PHRASE_PRIVATE_KEY'):
-            print("App Secret is not set up. Please Add your app secret in /.env file to check for request validation")
-            return True
-        signature_header = req.headers.get("x-hub-signature-256")
-        signature_buffer = bytes(signature_header.replace("sha256=", ""), "utf-8")
-        hmac = crypto.create_hmac("sha256", os.getenv('FACEBOOK_PHRASE_PRIVATE_KEY'))
-        digest_string = hmac.update(req.data).digest('hex')
-        digest_buffer = bytes(digest_string, "utf-8")
-        if not crypto.timing_safe_equal(digest_buffer, signature_buffer):
-            print("Error: Request Signature did not match")
-            return False
-        return True
+        message = json.loads(req.body.decode('utf-8'))
+        user = message.get("entry")[0].get("changes")[0].get("value")
+        user = json.loads(user["message"])
+        if user.get("type") == "text":
+            message_dto = MessageDto(**user)
+            await self.handle_message(message_dto)
+        return res.status(200).send('OK')
 
-    def handle_payment_success(self, query: Any):
+    def is_request_signature_valid(self, req) -> bool:
+        # Implementa la lógica para validar la firma aquí
         pass
 
-    def handle_payment_cancel(self, query: Any):
-        pass
-
-    async def handle_payment_webhook(self, req, res):
-        sig = req.headers.get("stripe-signature")
-        endpoint_secret = os.getenv('STRIPE_SECRET_ENDPOINT')
-        try:
-            event = self.stripe.webhooks.construct_event(req.data, sig, endpoint_secret)
-        except Exception as error:
-            return res.status(400).send(f"Webhook Error: {error.message}")
-        if event.type == "charge.succeeded":
-            charge_succeeded = event.data.object
-            payload = {"stripePaymentId": charge_succeeded.id, "orderId": charge_succeeded.metadata.orderId, "receipUrl": charge_succeeded.receipt_url}
-            await send_message_fetch(f"Tu pago ha sido procesado con éxito, aquí está tu recibo: {payload['receipUrl']}", charge_succeeded.metadata.phone)
-        return res.status(200).json({"sig": sig})
+    async def get_next_screen(self, phone_number: str, intent: str):
+        response = await get_next_screen(phone_number, intent)
+        return response
