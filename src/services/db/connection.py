@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 import psycopg2
-from psycopg2 import OperationalError
+from psycopg2 import OperationalError, extras
 
 def get_db_connection():
     # Cargar las variables de entorno desde el archivo .env
@@ -13,17 +13,19 @@ def get_db_connection():
     db_host = os.getenv('DB_HOST')
     db_port = os.getenv('DB_PORT')
     db_name = os.getenv('DB_NAME')
-    db_sslmode = os.getenv('DB_SSLMODE')
+    db_sslmode = os.getenv('DB_SSLMODE', 'require')  # Default to 'require' if not set
+
+    # Construir la URL de conexión a la base de datos
+    db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?sslmode={db_sslmode}"
+    print(f"Conectando a la base de datos en: {db_url}")
 
     # Establecer la conexión a la base de datos
     try:
         connection = psycopg2.connect(
-            user=db_user,
-            password=db_password,
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            sslmode=db_sslmode
+            db_url,
+            sslmode='require',
+            application_name="flask_email_app",
+            cursor_factory=extras.RealDictCursor
         )
         print("Conexión a la base de datos establecida correctamente")
         return connection
