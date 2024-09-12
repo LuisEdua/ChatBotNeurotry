@@ -7,13 +7,20 @@ from base64 import b64decode, b64encode
 import json
 import binascii
 
-
 class EncryptationService:
 
     def decrypt_request(self, body: dict, private_pem: str, passphrase: str) -> dict:
-        encrypted_aes_key = b64decode(body['encrypted_aes_key'])
-        encrypted_flow_data = b64decode(body['encrypted_flow_data'])
-        initial_vector = b64decode(body['initial_vector'])
+        def add_padding(b64_string):
+            return b64_string + '=' * (-len(b64_string) % 4)
+
+        # Debugging output
+        print("Encrypted AES Key:", body['encrypted_aes_key'])
+        print("Encrypted Flow Data:", body['encrypted_flow_data'])
+        print("Initial Vector:", body['initial_vector'])
+
+        encrypted_aes_key = b64decode(add_padding(body['encrypted_aes_key']))
+        encrypted_flow_data = b64decode(add_padding(body['encrypted_flow_data']))
+        initial_vector = b64decode(add_padding(body['initial_vector']))
 
         # Load private key
         private_key = serialization.load_pem_private_key(
@@ -32,7 +39,7 @@ class EncryptationService:
                 )
             )
         except Exception as e:
-            print(e)
+            print(f"RSA Decryption Error: {e}")
             raise ValueError("Failed to decrypt the request. Please verify your private key.")
 
         # Split flow data into body and tag
@@ -47,8 +54,12 @@ class EncryptationService:
         )
         decryptor = cipher.decryptor()
 
-        decrypted_json_str = decryptor.update(encrypted_flow_data_body) + decryptor.finalize()
-        decrypted_body = json.loads(decrypted_json_str.decode('utf-8'))
+        try:
+            decrypted_json_str = decryptor.update(encrypted_flow_data_body) + decryptor.finalize()
+            decrypted_body = json.loads(decrypted_json_str.decode('utf-8'))
+        except Exception as e:
+            print(f"AES Decryption Error: {e}")
+            raise ValueError("Failed to decrypt flow data. Please verify your AES key and IV.")
 
         return {
             'decryptedBody': decrypted_body,
@@ -73,25 +84,3 @@ class EncryptationService:
         # Concatenate encrypted data and auth tag
         encrypted_response = encrypted_data + auth_tag
         return b64encode(encrypted_response).decode('utf-8')
-
-
-# Example usage
-private_key_pem = """-----BEGIN ENCRYPTED PRIVATE KEY-----
-...
------END ENCRYPTED PRIVATE KEY-----"""
-passphrase = "your_passphrase"
-
-body = {
-    "encrypted_aes_key": "base64_encoded_aes_key",
-    "encrypted_flow_data": "base64_encoded_flow_data",
-    "initial_vector": "base64_encoded_initial_vector"
-}
-
-service = EncryptationService()
-decrypted_data = service.decrypt_request(body, private_key_pem, passphrase)
-print(decrypted_data)
-
-response = {"key": "value"}
-encrypted_response = service.encrypt_response(response, decrypted_data['aesKeyBuffer'],
-                                              decrypted_data['initialVectorBuffer'])
-print(encrypted_response)
