@@ -20,15 +20,13 @@ class WhatsappController:
 
     def handle_message(self):
         message_dto = WebhookMessageDto(**request.json)
-        if (
-                message_dto.entry[0].changes[0].value and
-                message_dto.entry[0].changes[0].value.messages and
-                message_dto.entry[0].changes[0].value.messages[0]
-        ):
+        print(message_dto.entry[0]["changes"][0]["value"]["messages"][0])
+
+        try:
             message = message_dto.entry[0].changes[0].value.messages[0]
             self.whatsapp_service.handle_message(message)
             return jsonify({"status": "EVENT_RECEIVED"}), 200
-        else:
+        except KeyError:
             return jsonify({"status": "Bad Request"}), 400
 
     def verify(self):
@@ -59,6 +57,7 @@ encryptation_service = EncryptationService()
 
 # Initialize controller
 whatsapp_controller_instance = WhatsappController(google_ai_service, cloudinary_service, encryptation_service)
+
 whatsapp_controller.add_url_rule('/whatsapp', 'handle_message', whatsapp_controller_instance.handle_message,
                                  methods=['POST'])
 whatsapp_controller.add_url_rule('/whatsapp', 'verify', whatsapp_controller_instance.verify, methods=['GET'])
