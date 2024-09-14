@@ -1,21 +1,30 @@
-import os
-import json
-from dotenv import load_dotenv
 import openai
 from pydantic import BaseModel
+import json
 from typing import List, Any, Dict, Union
-from prisma import Prisma
+from sqlalchemy import Column, String, Integer, Float, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+import os
+from src.services.db.connection import get_db_session
 
-load_dotenv()
+Base = declarative_base()
 
+class MessageEvaluated(Base):
+    __tablename__ = 'message_evaluated'
+    id = Column(Integer, primary_key=True)
+    is_welcome = Column(Boolean)
+    want_to_buy = Column(Boolean)
+    is_giving_thanks = Column(Boolean)
+    is_account_information = Column(Boolean)
+    is_orders = Column(Boolean)
+    catalog = Column(String)
 
-class MessageEvaluated(BaseModel):
-    is_welcome: bool
-    want_to_buy: bool
-    is_giving_thanks: bool
-    is_account_information: bool
-    catalog: Union[None, List[Dict[str, Union[str, int, float]]]]
-    is_orders: bool
+class Product(Base):
+    __tablename__ = 'product'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    quantity = Column(Integer)
+    price = Column(Float)
 
 
 class Product(BaseModel):
@@ -25,10 +34,11 @@ class Product(BaseModel):
     price: float
 
 
-class OpenAiService(Prisma):
+class OpenAiService:
     def __init__(self):
         super().__init__()
         openai.api_key = os.getenv('OPENAI_API_KEY')
+        self.db_session = get_db_session()
 
     async def on_module_init(self):
         await self.connect()
