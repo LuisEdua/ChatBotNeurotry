@@ -2,9 +2,7 @@ import os
 import json
 import stripe
 from typing import List, Any
-from src.services.db.connection import get_db_connection
-from src.services.OpenAi.OpenAi_service import OpenAiService
-from src.services.gemini.gemini_service import GoogleAiService
+from src.services.db.connection import get_db_session
 from src.services.Encrytation.Encryptation import EncryptationService
 from src.services.Cloudinary.cloudinary_service import CloudinaryService
 from src.whatsapp.constants.send_registration_messages_fetch import send_registration_fetch
@@ -21,7 +19,7 @@ stripe.api_key = os.getenv('STRIPE_SECRET')
 class WhatsappService:
     def __init__(self, model, encrypt_service: EncryptationService, cloudinary_service: CloudinaryService):
         self.model = model
-        self.db_service = get_db_connection()
+        self.db_service = get_db_session()
         self.encrypt_service = encrypt_service
         self.cloudinary_service = cloudinary_service
 

@@ -1,33 +1,36 @@
-import os
 import json
-from dotenv import load_dotenv
 import google.generativeai as genai
-from pydantic import BaseModel
 from typing import List, Any, Dict, Union
-from prisma import Prisma
+from sqlalchemy import Column, String, Integer, Float, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+import os
+from src.services.db.connection import get_db_session
 
-load_dotenv()
+Base = declarative_base()
 
-class MessageEvaluated(BaseModel):
-    is_welcome: bool
-    want_to_buy: bool
-    is_giving_thanks: bool
-    is_account_information: bool
-    catalog: Union[None, List[Dict[str, Union[str, int, float]]]]
-    is_orders: bool
+class MessageEvaluated(Base):
+    __tablename__ = 'message_evaluated'
+    id = Column(Integer, primary_key=True)
+    is_welcome = Column(Boolean)
+    want_to_buy = Column(Boolean)
+    is_giving_thanks = Column(Boolean)
+    is_account_information = Column(Boolean)
+    is_orders = Column(Boolean)
+    catalog = Column(String)
 
-class Product(BaseModel):
-    id: str
-    name: str
-    quantity: int
-    price: float
+class Product(Base):
+    __tablename__ = 'product'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    quantity = Column(Integer)
+    price = Column(Float)
 
-class GoogleAiService(Prisma):
+class GoogleAiService:
     def __init__(self):
         super().__init__()
         genai.configure(api_key=os.getenv('GOOGLE_GEMINI_API_KEY'))
         self.model = genai.GenerativeModel('gemini-1.5-flash')
-        self.model = None
+        self.db_session = get_db_session()
 
     async def on_module_init(self):
         await self.connect()
@@ -48,12 +51,12 @@ class GoogleAiService(Prisma):
         - Si el cliente quiere ver sus pedidos: {{ isOrders: true }}
         El JSON debe seguir este formato exacto:
         {{
-          "isWelcome": false,
-          "wantToBuy": false,
-          "isGivingThanks": false,
-          "isAccountInformation": false,
-          "isOrders": false,
-          "catalog": null
+        "isWelcome": false,
+        "wantToBuy": false,
+        "isGivingThanks": false,
+        "isAccountInformation": false,
+        "isOrders": false,
+        "catalog": null
         }}
         IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional. 
         Aquí está el mensaje que quiero que analices: "{message_to_evaluate}" """

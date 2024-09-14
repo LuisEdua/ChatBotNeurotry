@@ -1,9 +1,11 @@
 import os
 from dotenv import load_dotenv
-import psycopg2
-from psycopg2 import OperationalError, extras
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.exc import OperationalError
 
-def get_db_connection():
+
+def get_db_session():
     # Cargar las variables de entorno desde el archivo .env
     load_dotenv()
 
@@ -19,20 +21,17 @@ def get_db_connection():
     db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?sslmode={db_sslmode}"
     print(f"Conectando a la base de datos en: {db_url}")
 
-    # Establecer la conexión a la base de datos
+    # Crear el motor de SQLAlchemy
+    engine = create_engine(db_url)
+
+    # Intentar establecer una sesión con la base de datos
     try:
-        connection = psycopg2.connect(
-            db_url,
-            sslmode='require',
-            application_name="flask_email_app",
-            cursor_factory=extras.RealDictCursor
-        )
+        # Configurar la sesión
+        Session = scoped_session(sessionmaker(bind=engine))
+        session = Session()
         print("Conexión a la base de datos establecida correctamente")
-        return connection
+        return session
 
     except OperationalError as error:
         print(f"Error de operación al conectar a la base de datos: {error}")
-        return None
-    except Exception as error:
-        print(f"Error inesperado al conectar a la base de datos: {error}")
         return None
