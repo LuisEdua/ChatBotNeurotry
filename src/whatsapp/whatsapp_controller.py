@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from pydantic import BaseModel
 from typing import Any, Dict
-from src.services.OpenAi.OpenAi_service import OpenAiService
+#from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
 from src.whatsapp.whatsapp_service import WhatsappService
 from src.services.Cloudinary.cloudinary_service import CloudinaryService
@@ -18,13 +18,13 @@ class WhatsappController:
     def __init__(self, model, cloudinary_service: CloudinaryService, encryptation_service: EncryptationService):
         self.whatsapp_service = WhatsappService(model, encryptation_service, cloudinary_service)
 
-    def handle_message(self):
-        message_dto = WebhookMessageDto(**request.json)
-        print(message_dto.entry[0]["changes"][0]["value"]["messages"][0])
-
+    async def handle_message(self):
+        message_dto = request.get_json()
         try:
-            message = message_dto.entry[0].changes[0].value.messages[0]
-            self.whatsapp_service.handle_message(message)
+
+            message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
+            await self.whatsapp_service.handle_message(message)
+
             return jsonify({"status": "EVENT_RECEIVED"}), 200
         except KeyError:
             return jsonify({"status": "Bad Request"}), 400
@@ -50,7 +50,7 @@ class WhatsappController:
 
 
 # Initialize services
-openai_service = OpenAiService()
+#openai_service = OpenAiService()
 google_ai_service = GoogleAiService()
 cloudinary_service = CloudinaryService()
 encryptation_service = EncryptationService()

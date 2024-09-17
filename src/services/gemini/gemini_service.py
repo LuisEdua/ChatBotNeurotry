@@ -4,7 +4,7 @@ from typing import List, Any, Dict, Union
 from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 import os
-from src.services.db.connection import get_db_session
+from src.services.db.connection import Session as session
 
 Base = declarative_base()
 
@@ -30,7 +30,7 @@ class GoogleAiService:
         super().__init__()
         genai.configure(api_key=os.getenv('GOOGLE_GEMINI_API_KEY'))
         self.model = genai.GenerativeModel('gemini-1.5-flash')
-        self.db_session = get_db_session()
+        self.db_session = session()
 
     async def on_module_init(self):
         await self.connect()
@@ -39,7 +39,7 @@ class GoogleAiService:
         chat = self.model.start_chat(history=history, generation_config={"max_output_tokens": 100})
         last_message = history[-1]['parts'][0]['text']
         result = await chat.send_message(last_message)
-        return result.response.text()
+        return result
 
     async def evaluate_client_response(self, message_to_evaluate: str) -> MessageEvaluated:
         prompt = f"""Voy a darte un mensaje de un cliente y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Evalúa el mensaje según los siguientes parámetros:
@@ -61,9 +61,8 @@ class GoogleAiService:
         IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional. 
         Aquí está el mensaje que quiero que analices: "{message_to_evaluate}" """
         try:
-            self.model = self.gen_ai.get_generative_model(model="gemini-1.5-flash")
-            result = await self.model.generate_content(prompt)
-            return self.convert_to_json(result.response.text())
+            text = self.model.generate_content(prompt).text
+            return json.loads(text)
         except Exception as error:
             print(error)
             return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False, is_account_information=False, is_orders=False, catalog=None)
@@ -84,9 +83,8 @@ class GoogleAiService:
         existing_products = await self.product.find_many()
         prompt = f"""Voy a darte un array de productos y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Este es el array de productos existentes: {json.dumps(existing_products)}, ahora quiero que me devuelvas un array JSON con los productos que el cliente quiere según los productos existentes. Ejemplo: [{{id: '12', name: "product_name", quantity: 1, price: 1}}] IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional. Aquí está el array de productos que quiero que analices: {json.dumps(products)}"""
         try:
-            self.model = self.gen_ai.get_generative_model(model="gemini-1.5-flash")
-            result = await self.model.generate_content(prompt)
-            return self.convert_products_to_json(result.response.text())
+            result = self.model.generate_content(prompt).text
+            return json.loads(result)
         except Exception as error:
             print(error)
             return []
@@ -163,9 +161,8 @@ class GoogleAiService:
         ]
     }}. Necesito que me regreses este objeto JSON reemplazando el arreglo de productos que está en __example__ por el arreglo de productos que te estoy enviando. No olvides que no quiero que me regreses texto adicional, solo el objeto JSON."""
         try:
-            self.model = self.gen_ai.get_generative_model(model="gemini-1.5-flash")
-            result = await self.model.generate_content(prompt)
-            json_generated = self.convert_to_json_object(result.response.text())
+            result = self.model.generate_content(prompt)
+            json_generated = self.convert_to_json_object(result)
             for i in range(len(json_generated['screens'][0]['data']['products']['__example__'])):
                 json_generated['screens'][0]['data']['products']['__example__'][i] = products[i]
             return json_generated
@@ -176,9 +173,8 @@ class GoogleAiService:
     async def generate_feedback_message(self, feedback: str, client: str) -> str:
         prompt = f"""Voy a darte un mensaje de feedback del cliente y quiero que me devuelvas **únicamente la respuesta que podríamos darle al cliente**. Aquí está el mensaje de feedback: "{feedback}". Recalcarle que es importante que estamos al tanto de su opinión y que estamos trabajando para mejorar nuestros servicios. Puedes agregar al feedback el nombre del cliente para hacerlo más personalizado. No olvides que la respuesta que me des debe de ser relacionada con el feedback del cliente. El nombre del cliente es: "{client}". También puedes agregar algún mensaje de agradecimiento y puedes utilizar emojis para hacerlo más amigable. Trata de no extenderte mucho en la respuesta."""
         try:
-            self.model = self.gen_ai.get_generative_model(model="gemini-1.5-flash")
-            result = await self.model.generate_content(prompt)
-            return result.response.text()
+            result = self.model.generate_content(prompt)
+            return result
         except Exception as error:
             print(error)
             return ""
