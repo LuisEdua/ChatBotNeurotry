@@ -4,7 +4,7 @@ from typing import List, Any, Dict, Union
 from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 import os
-from src.services.db.connection import Session as session
+from src.services.db.connection import Session as session, Product
 
 Base = declarative_base()
 
@@ -17,13 +17,6 @@ class MessageEvaluated(Base):
     is_account_information = Column(Boolean)
     is_orders = Column(Boolean)
     catalog = Column(String)
-
-class Product(Base):
-    __tablename__ = 'product'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    quantity = Column(Integer)
-    price = Column(Float)
 
 class GoogleAiService:
     def __init__(self):

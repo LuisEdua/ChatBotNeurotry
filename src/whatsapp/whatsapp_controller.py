@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from pydantic import BaseModel
 from typing import Any, Dict
-#from src.services.OpenAi.OpenAi_service import OpenAiService
+from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
 from src.whatsapp.whatsapp_service import WhatsappService
 from src.services.Cloudinary.cloudinary_service import CloudinaryService
@@ -50,13 +50,13 @@ class WhatsappController:
 
 
 # Initialize services
-#openai_service = OpenAiService()
+openai_service = OpenAiService()
 google_ai_service = GoogleAiService()
 cloudinary_service = CloudinaryService()
 encryptation_service = EncryptationService()
 
 # Initialize controller
-whatsapp_controller_instance = WhatsappController(google_ai_service, cloudinary_service, encryptation_service)
+whatsapp_controller_instance = WhatsappController(openai_service, cloudinary_service, encryptation_service)
 
 whatsapp_controller.add_url_rule('/whatsapp', 'handle_message', whatsapp_controller_instance.handle_message,
                                  methods=['POST'])

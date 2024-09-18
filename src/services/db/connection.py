@@ -76,6 +76,24 @@ class Product(Base):
     image = Column(String)
     createdAt = Column(DateTime, default=func.now())
     updatedAt = Column(DateTime, onupdate=func.now())
+"""    
+class MessageEvaluated(Base):
+    __tablename__ = 'message_evaluated'
+    id = Column(String, primary_key=True)
+    is_welcome = Column(Boolean)
+    want_to_buy = Column(Boolean)
+    is_giving_thanks = Column(Boolean)
+    is_account_information = Column(Boolean)
+    is_orders = Column(Boolean)
+    catalog = Column(String)
+
+class Product(Base):
+    __tablename__ = 'product'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    quantity = Column(Integer)
+    price = Column(Float)
+"""
 
 # Crear todas las tablas en la base de datos
 Base.metadata.create_all(bind=engine)

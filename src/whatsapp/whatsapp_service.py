@@ -108,6 +108,7 @@ class WhatsappService:
                 flow_generated = await self.model.generate_json_products_catalog(products_list, products_list_images)
         except Exception as error:
             await send_message_fetch("Ocurrió un error al intentar obtener los productos, intenta de nuevo 🙏", message["from"])
+
     async def is_welcome(self, message: MessageDto):
         user = session().query(User).filter(User.phone == message["from"]).first()
         if user:
