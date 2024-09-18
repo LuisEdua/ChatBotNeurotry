@@ -1,11 +1,11 @@
-import openai
+from openai import OpenAI
 from pydantic import BaseModel
 import json
 from typing import List, Any, Dict, Union
 from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 import os
-from src.services.db.connection import get_db_session
+from src.services.db.connection import Session as session, Product
 
 Base = declarative_base()
 
@@ -19,38 +19,20 @@ class MessageEvaluated(Base):
     is_orders = Column(Boolean)
     catalog = Column(String)
 
-class Product(Base):
-    __tablename__ = 'product'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    quantity = Column(Integer)
-    price = Column(Float)
-
-
-class Product(BaseModel):
-    id: str
-    name: str
-    quantity: int
-    price: float
-
-
 class OpenAiService:
     def __init__(self):
         super().__init__()
-        openai.api_key = os.getenv('OPENAI_API_KEY')
-        self.db_session = get_db_session()
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.db_session = session()
 
-    async def on_module_init(self):
-        await self.connect()
 
     async def generate_text(self, history: List[Dict[str, Any]], model: str = "text-davinci-003") -> str:
         messages = [{"role": "system", "content": "You are a helpful assistant."}]
         for message in history:
             messages.append({"role": message['role'], "content": message['parts'][0]['text']})
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages=messages,
-            max_tokens=100
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
         )
         return response.choices[0].message['content']
 
@@ -74,20 +56,16 @@ class OpenAiService:
         IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional.
         Aquí está el mensaje que quiero que analices: "{message_to_evaluate}" """
         try:
-            response = openai.Completion.create(
-                model="text-davinci-003",
-                prompt=prompt,
-                max_tokens=150
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
             )
-            return self.convert_to_json(response.choices[0].text)
+            choice_string = response.choices[0].message.content
+            return json.loads(choice_string)
         except Exception as error:
             print(error)
             return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False,
                                     is_account_information=False, is_orders=False, catalog=None)
-
-    def convert_to_json(self, text: str) -> MessageEvaluated:
-        cleaned_text = text.replace('```json', '').replace('```', '').strip()
-        return MessageEvaluated.parse_raw(cleaned_text)
 
     def convert_products_to_json(self, text: str) -> List[Product]:
         cleaned_text = text.replace('```json', '').replace('```', '').strip()
@@ -101,10 +79,9 @@ class OpenAiService:
         existing_products = await self.product.find_many()
         prompt = f"""Voy a darte un array de productos y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Este es el array de productos existentes: {json.dumps(existing_products)}, ahora quiero que me devuelvas un array JSON con los productos que el cliente quiere según los productos existentes. Ejemplo: [{{id: '12', name: "product_name", quantity: 1, price: 1}}] IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional. Aquí está el array de productos que quiero que analices: {json.dumps(products)}"""
         try:
-            response = openai.Completion.create(
-                model="text-davinci-003",
-                prompt=prompt,
-                max_tokens=150
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
             )
             return self.convert_products_to_json(response.choices[0].text)
         except Exception as error:
@@ -184,10 +161,9 @@ class OpenAiService:
         ]
     }}. Necesito que me regreses este objeto JSON reemplazando el arreglo de productos que está en __example__ por el arreglo de productos que te estoy enviando. No olvides que no quiero que me regreses texto adicional, solo el objeto JSON."""
         try:
-            response = openai.Completion.create(
-                model="text-davinci-003",
-                prompt=prompt,
-                max_tokens=300
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
             )
             json_generated = self.convert_to_json_object(response.choices[0].text)
             for i in range(len(json_generated['screens'][0]['data']['products']['__example__'])):
@@ -200,10 +176,9 @@ class OpenAiService:
     async def generate_feedback_message(self, feedback: str, client: str) -> str:
         prompt = f"""Voy a darte un mensaje de feedback del cliente y quiero que me devuelvas **únicamente la respuesta que podríamos darle al cliente**. Aquí está el mensaje de feedback: "{feedback}". Recalcarle que es importante que estamos al tanto de su opinión y que estamos trabajando para mejorar nuestros servicios. Puedes agregar al feedback el nombre del cliente para hacerlo más personalizado. No olvides que la respuesta que me des debe de ser relacionada con el feedback del cliente. El nombre del cliente es: "{client}". También puedes agregar algún mensaje de agradecimiento y puedes utilizar emojis para hacerlo más amigable. Trata de no extenderte mucho en la respuesta."""
         try:
-            response = openai.Completion.create(
-                model="text-davinci-003",
-                prompt=prompt,
-                max_tokens=150
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
             )
             return response.choices[0].text
         except Exception as error:
