@@ -55,18 +55,23 @@ class Flow(Base):
 class Message(Base):
     __tablename__ = 'messages'
     id = Column(String, primary_key=True, default=uuid.uuid4)
-    role = Column(String)
+    whatsapp_id = Column(String)
     text = Column(String)
-    createdAt = Column(DateTime, default=func.now())
-    conversationId = Column(String, ForeignKey('conversations.id'))
-    conversation = relationship('Conversation', back_populates='messages')
+    create_at = Column(DateTime, default=func.now())
 
-class Conversation(Base):
-    __tablename__ = 'conversations'
+class user_profile(Base):
+    __tablename__ = 'user_profile'
     id = Column(String, primary_key=True, default=uuid.uuid4)
-    phone = Column(String, unique=True)
-    messages = relationship('Message', back_populates='conversation', cascade="all, delete")
-    createdAt = Column(DateTime, default=func.now())
+    user_id = Column(String, ForeignKey('users.id'))
+    user = relationship('User')
+    data = Column(String)
+
+class segmentations(Base):
+    __tablename__ = 'segmentations'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey('users.id'))
+    name = Column(String)
+    data = Column(String)
 
 class Product(Base):
     __tablename__ = 'products'

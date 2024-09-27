@@ -63,6 +63,7 @@ class WhatsappService:
 """
     async def handle_text_message(self, message: MessageDto):
         client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
+        create_message(message);
         if client_service['isWelcome']:
             await self.is_welcome(message)
         elif client_service['wantToBuy'] and not client_service['catalog']:
@@ -92,6 +93,9 @@ class WhatsappService:
 
     async def did_not_understand(self, message: MessageDto):
         resultado = await send_message_fetch("Lo siento, no entendí tu mensaje, ¿puedes repetirlo? 🙏", message["from"])
+
+    async def save_message(self, create_message: MessageDto):
+
 
     async def want_to_buy(self, message: MessageDto):
         try:
