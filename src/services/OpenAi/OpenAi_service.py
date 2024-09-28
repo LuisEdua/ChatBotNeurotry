@@ -43,6 +43,7 @@ class OpenAiService:
         - Si el cliente quiere comprar y selecciona uno o mas productos: {{ wantToBuy: true, catalog: [{{name: "product_name", quantity: 1, price: 1}}] }}
         - Si el cliente está agradeciendo o dando las gracias: {{ isGivingThanks: true }}
         - Si el cliente quiere información de su cuenta: {{ isAccountInformation: true }}
+        - Si el cliente quiere logearse {{ isLogin: true }}
         - Si el cliente quiere ver sus pedidos: {{ isOrders: true }},
         - Si el cliente nos da información personal debes devolverla en un array de objetos JSON el json debe tener la llave user_profile_data y dentro de ella un array de objetos JSON con la llave data que tendrá un string y con la llave title que también será string.
         - Debes segmentar el mensaje en distintas categorías y devolver un array de objetos JSON con la llave segmentations y dentro de ella un array de objetos JSON con la llave name y data.
@@ -56,6 +57,7 @@ class OpenAiService:
           "isAccountInformation": false,
           "isOrders": false,
           "catalog": null,
+          "isLogin": false,
           "user_profile_data":[
             {{
                 "title": null,
