@@ -5,6 +5,10 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from base64 import b64decode, b64encode
 import json
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from os import urandom
+import base64
 import binascii
 
 class EncryptationService:
@@ -84,3 +88,39 @@ class EncryptationService:
         # Concatenate encrypted data and auth tag
         encrypted_response = encrypted_data + auth_tag
         return b64encode(encrypted_response).decode('utf-8')
+
+    def encrypt_password(self, password: str) -> str:
+        # Generar un salt aleatorio
+        salt = urandom(16)
+
+        # Derivar una clave utilizando PBKDF2
+        kdf = hashes.PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+
+        # Retornar el salt y la clave encriptada como un string codificado
+        return base64.urlsafe_b64encode(salt + key).decode('utf-8')
+
+    def validate_password(self, password: str, encrypted_password: str) -> bool:
+        # Decodificar la contraseña encriptada
+        decoded = base64.urlsafe_b64decode(encrypted_password.encode())
+        salt = decoded[:16]
+        stored_key = decoded[16:]
+
+        # Derivar la clave usando el mismo salt
+        kdf = hashes.PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+
+        # Comparar la clave derivada con la clave almacenada
+        return key == stored_key
