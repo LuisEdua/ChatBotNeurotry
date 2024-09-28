@@ -1,3 +1,4 @@
+
 import os
 import json
 import stripe
@@ -13,9 +14,13 @@ from src.whatsapp.interfaces.interactive_message_interface import InteractiveMes
 from src.whatsapp.interfaces.register_response_interface import RegisterResponse
 from src.whatsapp.dtos.message import MessageDto
 from src.services.db.connection import User, Product
+import logging
 
 # Configura la clave de API de Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET')
+
+# Configura el logging
+logging.basicConfig(level=logging.INFO)
 
 class WhatsappService:
     def __init__(self, model, encrypt_service: EncryptationService, cloudinary_service: CloudinaryService):
@@ -24,25 +29,29 @@ class WhatsappService:
         self.cloudinary_service = cloudinary_service
 
     def verify(self, verify_token: str, challenge: str):
+        logging.info(f"Verifying token: {verify_token}")
         if verify_token == os.getenv('SECRET_WPP_TOKEN') and challenge:
+            logging.info("Token verified successfully.")
             return challenge
         else:
+            logging.error("Invalid verify token.")
             raise ValueError("Invalid verify token")
 
     async def handle_message(self, message_dto: Any):
+        logging.info(f"Handling message of type: {message_dto['type']}")
         if message_dto["type"] == "text":
             await self.handle_text_message(message_dto)
         elif message_dto["type"] == "interactive":
             await self.handle_interactive_message(message_dto)
 
     async def handle_interactive_message(self, message: InteractiveMessage):
+        logging.info(f"Handling interactive message from: {message['from']}")
         response_parsed = json.loads(message["interactive"]["nfm_reply"]["response_json"])
         if "products" in response_parsed:
-            print(response_parsed.get("products"))
+            logging.info("Products found in interactive message.")
             await send_message_fetch("Los productos se han agregado, por favor verifique sus pedidos", message["from"])
         elif response_parsed.get("type") == "feedback":
-            print("feedback received")
-            print(response_parsed)
+            logging.info("Feedback received.")
             client = await session().user.find_first(where={"phone": message["from"]})
             response = await self.model.generate_feedback_message(response_parsed["feedback_text"], client.name)
             await send_message_fetch(response, message["from"])
@@ -50,18 +59,24 @@ class WhatsappService:
             payload = RegisterResponse(**json.loads(message["interactive"]["nfm_reply"]["response_json"]))
             exist = session().query(User).filter(User.email == payload.email).first()
             if exist:
+                logging.warning("Email already registered.")
                 await send_message_fetch("Este correo ya ha sido registrado con anterioridad, intenta de nuevo 🙏", message["from"])
             else:
-                #try:
-                user = User(name=payload.name, email=payload.email, phone=message["from"], password=payload.password)
-                session().add(user)
-                session().commit()
-                await send_message_fetch(f"Gracias por registrarte {user.name}, ahora puedes comenzar a comprar productos con tu asistente Duna 🚀", message["from"])
-                await send_message_fetch("En que puedo ayudarte hoy? 🤔\n_____________________\nComprar un producto de nuestra tienda 🛍️\nVer todos mis pedidos 📦\n Ver información de mi cuenta 📊~", message["from"])
-                """except Exception as error:
+                try:
+                    logging.info("Registering new user.")
+                    encrypted_password = self.encrypt_service.encrypt_password(payload.password)
+                    user = User(name=payload.name, email=payload.email, phone=message["from"], password=encrypted_password)
+                    session().add(user)
+                    session().commit()
+                    logging.info("User registered successfully.")
+                    await send_message_fetch(f"Gracias por registrarte {user.name}, ahora puedes comenzar a comprar productos con tu asistente Duna 🚀", message["from"])
+                    await send_message_fetch("En que puedo ayudarte hoy? 🤔", message["from"])
+                except Exception as error:
+                    logging.error(f"Error registering user: {error}")
                     await send_message_fetch("Ocurrió un error al registrar tu cuenta, intenta de nuevo 🙏", message["from"])
-"""
+
     async def handle_text_message(self, message: MessageDto):
+        logging.info(f"Handling text message from: {message['from']}")
         client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
         create_message(message);
         if client_service['isWelcome']:
@@ -79,6 +94,7 @@ class WhatsappService:
             await self.did_not_understand(message)
 
     async def handle_buy_product(self, message: MessageDto, products: List[dict]):
+        logging.info(f"Handling product purchase for user: {message['from']}")
         line_items = [{"price_data": {"currency": "mxn", "product_data": {"name": product["name"]}, "unit_amount": round(product["price"] * 100)}, "quantity": product["quantity"]} for product in products]
         session = await stripe.checkout.sessions.create(
             payment_intent_data={"metadata": {"orderId": "12345", "phone": message["from"]}},
@@ -89,21 +105,26 @@ class WhatsappService:
         )
         await send_message_fetch("En seguida enviamos el link para que puedas completar tu compra 🛍️", message["from"])
         await send_message_fetch(session.url, message["from"], True)
+        logging.info("Purchase session created successfully.")
         await send_message_fetch("Este link tiene una duración de 24 horas, si no completas tu compra en ese tiempo, deberás solicitar uno nuevo 🕒", message["from"])
 
     async def did_not_understand(self, message: MessageDto):
-        resultado = await send_message_fetch("Lo siento, no entendí tu mensaje, ¿puedes repetirlo? 🙏", message["from"])
+        logging.info(f"Message not understood from: {message['from']}")
+        await send_message_fetch("Lo siento, no entendí tu mensaje, ¿puedes repetirlo? 🙏", message["from"])
 
     async def save_message(self, create_message: MessageDto):
 
 
     async def want_to_buy(self, message: MessageDto):
+        logging.info(f"User {message['from']} wants to buy.")
         try:
             is_registered = session().query(User).filter(User.phone == message["from"]).first()
             if not is_registered:
+                logging.info("User is not registered. Prompting registration.")
                 await send_message_fetch("Hola, parece que no estás registrado en nuestra plataforma, ¿te gustaría registrarte?", message["from"])
                 await self.send_registration_message(message["from"])
             else:
+                logging.info("User is registered. Sending product catalog.")
                 await send_message_fetch("Enseguida te muestro los productos disponibles en nuestra tienda 🛍️", message["from"])
                 products = session().query(Product).all()
                 products_list = [{"id": product.id, "title": product.name, "description": f"${product.price}", "image": "[image_base64]"} for product in products]
@@ -111,8 +132,8 @@ class WhatsappService:
                 await send_catalog_fetch(message["from"], {"products": products_list_images})
                 flow_generated = await self.model.generate_json_products_catalog(products_list, products_list_images)
         except Exception as error:
+            logging.error(f"Error fetching products: {error}")
             await send_message_fetch("Ocurrió un error al intentar obtener los productos, intenta de nuevo 🙏", message["from"])
-
     async def is_welcome(self, message: MessageDto):
         user = session().query(User).filter(User.phone == message["from"]).first()
         if user:
