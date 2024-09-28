@@ -14,6 +14,7 @@ from src.whatsapp.interfaces.interactive_message_interface import InteractiveMes
 from src.whatsapp.interfaces.register_response_interface import RegisterResponse
 from src.whatsapp.dtos.message import MessageDto
 from src.services.db.connection import User, Product
+from src.whatsapp.constants.send_login_fetch import send_login_fetch
 import logging
 
 # Configura la clave de API de Stripe
@@ -98,6 +99,7 @@ class WhatsappService:
     async def handle_login(self, message: MessageDto):
         logging.info(f"User {message['from']} is attempting to log in.")
         # Here you can add the logic for handling user login, e.g., verifying credentials.
+        await send_login_fetch(message["from"])
         await send_message_fetch("Por favor, proporciona tus credenciales para iniciar sesión.", message["from"])
 
     async def handle_buy_product(self, message: MessageDto, products: List[dict]):
