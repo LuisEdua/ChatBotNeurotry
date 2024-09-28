@@ -83,7 +83,7 @@ class WhatsappService:
                                 client_service["segmentations"], client_service["user_profile_data"])
         if client_service['isSummary']:
             pass
-        if client_service['isLogin']:
+        elif client_service['isLogin']:
             await self.handle_login(message)
         elif client_service['isWelcome']:
             await self.is_welcome(message)

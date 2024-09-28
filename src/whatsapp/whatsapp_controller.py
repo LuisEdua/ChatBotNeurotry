@@ -3,7 +3,7 @@ import httpx
 import json
 import re
 from flask import Blueprint, request, jsonify
-from pydantic import BaseModel, constr, ValidationError
+from pydantic import BaseModel, constr, ValidationError, Field, field_validator
 from typing import Any, Dict
 from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
@@ -17,8 +17,31 @@ class WebhookMessageDto(BaseModel):
     entry: list
 
 class MessageDto(BaseModel):
-    from_: constr(regex=r'^\+\d{1,15}$')  # Número de teléfono con formato internacional
-    text: constr(strip_whitespace=True, min_length=1)  # Texto no vacío
+    from_: str = Field()
+    id: str = Field()
+    timestamp: str = Field()
+    text: dict = Field()
+    type: str = Field()
+
+    @field_validator('from_')
+    def validate_from(cls, v):
+        if not re.match(r'^\d{1,15}$', v):
+            raise ValueError('Invalid phone number format.')
+        return v
+
+    @field_validator('timestamp')
+    def validate_timestamp(cls, v):
+        if not re.match(r'^\d+$', v):
+            raise ValueError('Invalid timestamp format.')
+        return v
+
+    @field_validator('type')
+    def validate_type(cls, v):
+        if v not in ['text', 'image', 'video', 'audio', 'interactive']:
+            raise ValueError('Invalid message type.')
+        return v
+
+    text: constr(strip_whitespace=True, min_length=1)
 
 class WhatsappController:
     def __init__(self, model, cloudinary_service: CloudinaryService, encryptation_service: EncryptationService):
@@ -26,17 +49,17 @@ class WhatsappController:
 
     async def handle_message(self):
         message_dto = request.get_json()
-        try:
-            message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
+        #try:
+        message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
 
-            # Validar y limpiar la entrada
-            validated_message = self.validate_message(message)
+        # Validar y limpiar la entrada
+        validated_message = self.validate_message(message)
 
-            await self.whatsapp_service.handle_message(validated_message)
+        await self.whatsapp_service.handle_message(validated_message)
 
-            return jsonify({"status": "EVENT_RECEIVED"}), 200
-        except (KeyError, ValidationError):
-            return jsonify({"status": "Bad Request"}), 400
+        return jsonify({"status": "EVENT_RECEIVED"}), 200
+        """except (KeyError, ValidationError):
+            return jsonify({"status": "Bad Request"}), 400"""
 
     def validate_message(self, message: Dict[str, Any]) -> MessageDto:
         # Extraer y limpiar campos relevantes

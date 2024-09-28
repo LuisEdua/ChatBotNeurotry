@@ -62,7 +62,8 @@ class OpenAiService:
           "user_profile_data":[
             {{
                 "title": null,
-                "data": null
+                "data": null,
+                "personal_data": false
             }}
           ],
           "segmentations":[
