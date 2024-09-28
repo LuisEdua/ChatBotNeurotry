@@ -2,7 +2,7 @@ import os
 import json
 import stripe
 from typing import List, Any
-from src.services.db.connection import Session as session
+from src.services.db.connection import Session as session, Message, Segmentations, UserProfile
 from src.services.Encrytation.Encryptation import EncryptationService
 from src.services.Cloudinary.cloudinary_service import CloudinaryService
 from src.whatsapp.constants.send_registration_messages_fetch import send_registration_fetch
@@ -63,7 +63,7 @@ class WhatsappService:
 """
     async def handle_text_message(self, message: MessageDto):
         client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
-        create_message(message);
+        await self.save_message(message["text"]["body"], message["id"], message["from"], client_service["segmentations"], client_service["user_profile_data"])
         if client_service['isWelcome']:
             await self.is_welcome(message)
         elif client_service['wantToBuy'] and not client_service['catalog']:
@@ -94,8 +94,20 @@ class WhatsappService:
     async def did_not_understand(self, message: MessageDto):
         resultado = await send_message_fetch("Lo siento, no entendí tu mensaje, ¿puedes repetirlo? 🙏", message["from"])
 
-    async def save_message(self, create_message: MessageDto):
-
+    async def save_message(self, message: str, message_id: str, number: str, segs, user_profile):
+        session_instance = session()
+        if not session_instance.query(Message).filter(Message.whatsapp_id == message_id).first():
+            new_message = Message(whatsapp_id=message_id, text=message, number=number)
+            session_instance.add(new_message)
+            session_instance.commit()
+            if segs:
+                for seg in segs:
+                    session_instance.add(Segmentations(phone=number, title=seg["title"], data=seg["data"]))
+                session_instance.commit()
+            if user_profile:
+                for profile in user_profile:
+                    session_instance.add(UserProfile(phone=number, title=profile["title"], data=profile["data"]))
+                session_instance.commit()
 
     async def want_to_buy(self, message: MessageDto):
         try:
@@ -142,9 +154,6 @@ class WhatsappService:
 
     async def send_message(self, message: str, to: str, preview_url: bool = False):
         await send_message_fetch(to, message, preview_url)
-
-    async def save_message(self, role: str, text: str, conversation_id: str):
-        await session().message.create(data={"role": role, "text": text, "conversationId": conversation_id})
 
     async def handle_encrypted_message(self, req, res):
         if not os.getenv('FACEBOOK_PRIVATE_KEY'):

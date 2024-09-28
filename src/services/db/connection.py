@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import OperationalError
-from sqlalchemy import create_engine, Column, String, Float, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, String, Float, DateTime, ForeignKey, Boolean, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import uuid
@@ -56,21 +56,22 @@ class Message(Base):
     __tablename__ = 'messages'
     id = Column(String, primary_key=True, default=uuid.uuid4)
     whatsapp_id = Column(String)
+    number = Column(String)
     text = Column(String)
     create_at = Column(DateTime, default=func.now())
 
-class user_profile(Base):
+class UserProfile(Base):
     __tablename__ = 'user_profile'
     id = Column(String, primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey('users.id'))
-    user = relationship('User')
+    phone = Column(String)
+    title = Column(String)
     data = Column(String)
 
-class segmentations(Base):
+class Segmentations(Base):
     __tablename__ = 'segmentations'
     id = Column(String, primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey('users.id'))
-    name = Column(String)
+    phone = Column(String)
+    title = Column(String)
     data = Column(String)
 
 class Product(Base):
@@ -81,7 +82,7 @@ class Product(Base):
     image = Column(String)
     createdAt = Column(DateTime, default=func.now())
     updatedAt = Column(DateTime, onupdate=func.now())
-"""    
+
 class MessageEvaluated(Base):
     __tablename__ = 'message_evaluated'
     id = Column(String, primary_key=True)
@@ -91,14 +92,6 @@ class MessageEvaluated(Base):
     is_account_information = Column(Boolean)
     is_orders = Column(Boolean)
     catalog = Column(String)
-
-class Product(Base):
-    __tablename__ = 'product'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    quantity = Column(Integer)
-    price = Column(Float)
-"""
 
 # Crear todas las tablas en la base de datos
 Base.metadata.create_all(bind=engine)

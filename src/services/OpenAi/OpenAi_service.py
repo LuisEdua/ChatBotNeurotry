@@ -43,7 +43,11 @@ class OpenAiService:
         - Si el cliente quiere comprar y selecciona uno o mas productos: {{ wantToBuy: true, catalog: [{{name: "product_name", quantity: 1, price: 1}}] }}
         - Si el cliente está agradeciendo o dando las gracias: {{ isGivingThanks: true }}
         - Si el cliente quiere información de su cuenta: {{ isAccountInformation: true }}
-        - Si el cliente quiere ver sus pedidos: {{ isOrders: true }}
+        - Si el cliente quiere ver sus pedidos: {{ isOrders: true }},
+        - Si el cliente nos da información personal debes devolverla en un array de objetos JSON el json debe tener la llave user_profile_data y dentro de ella un array de objetos JSON con la llave data que tendrá un string y con la llave title que también será string.
+        - Debes segmentar el mensaje en distintas categorías y devolver un array de objetos JSON con la llave segmentations y dentro de ella un array de objetos JSON con la llave name y data.
+        - Para la segmentación todo mensaje debe ser segmentado, desde información basica como un saludo hasta información relevante como su situación sentimental, nada se debe dejar fuera.
+        - Para el perfil de usuario, si el cliente no proporciona información releventate el arreglo debe quedar vacio.
         El JSON debe seguir este formato exacto:
         {{
           "isWelcome": false,
@@ -51,7 +55,19 @@ class OpenAiService:
           "isGivingThanks": false,
           "isAccountInformation": false,
           "isOrders": false,
-          "catalog": null
+          "catalog": null,
+          "user_profile_data":[
+            {{
+                "title": null,
+                "data": null
+            }}
+          ],
+          "segmentations":[
+            {{
+                "title": null,
+                "data": null
+            }}
+          ]
         }}
         IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional.
         Aquí está el mensaje que quiero que analices: "{message_to_evaluate}" """
