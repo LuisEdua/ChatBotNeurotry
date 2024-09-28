@@ -78,7 +78,11 @@ class WhatsappService:
     async def handle_text_message(self, message: MessageDto):
         logging.info(f"Handling text message from: {message['from']}")
         client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
-        if client_service['isWelcome']:
+
+        # Check if the user is logging in
+        if client_service['isLogin']:
+            await self.handle_login(message)
+        elif client_service['isWelcome']:
             await self.is_welcome(message)
         elif client_service['wantToBuy'] and not client_service['catalog']:
             await self.want_to_buy(message)
@@ -91,6 +95,11 @@ class WhatsappService:
             await self.handle_buy_product(message, products)
         else:
             await self.did_not_understand(message)
+
+    async def handle_login(self, message: MessageDto):
+        logging.info(f"User {message['from']} is attempting to log in.")
+        # Here you can add the logic for handling user login, e.g., verifying credentials.
+        await send_message_fetch("Por favor, proporciona tus credenciales para iniciar sesión.", message["from"])
 
     async def handle_buy_product(self, message: MessageDto, products: List[dict]):
         logging.info(f"Handling product purchase for user: {message['from']}")
@@ -130,6 +139,7 @@ class WhatsappService:
         except Exception as error:
             logging.error(f"Error fetching products: {error}")
             await send_message_fetch("Ocurrió un error al intentar obtener los productos, intenta de nuevo 🙏", message["from"])
+
     async def is_welcome(self, message: MessageDto):
         user = session().query(User).filter(User.phone == message["from"]).first()
         if user:
@@ -149,10 +159,13 @@ class WhatsappService:
         user = session().query(User).filter(User.phone == message["from"]).first()
         if user:
             await send_message_fetch("En seguida te muestro la información de tu cuenta", message["from"])
-            await send_message_fetch(f"Nombre: {user.name}\nCorreo: {user.email}\nTelefono: {user.phone}", message["from"])
+            await send_message_fetch(f"Nombre: {user.name}\nCorreo: {user.email}\nTeléfono: {user.phone}", message["from"])
         else:
-            await send_message_fetch("Parece que no estás registrado en nuestra plataforma, ¿te gustaría registrarte?", message["from"])
+            await send_message_fetch("No estás registrado en nuestra plataforma, ¿te gustaría registrarte?", message["from"])
             await self.send_registration_message(message["from"])
+
+    async def send_registration_message(self, phone_number: str):
+        await send_registration_fetch(phone_number)
 
     async def send_registration_message(self, to: str):
         await send_registration_fetch(to)
