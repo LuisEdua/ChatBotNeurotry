@@ -79,7 +79,10 @@ class WhatsappService:
     async def handle_text_message(self, message: MessageDto):
         logging.info(f"Handling text message from: {message['from']}")
         client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
-        await self.save_message(message["text"]["body"], message["id"], message["from"], client_service["segmentations"], client_service["user_profile_data"])
+        await self.save_message(message["text"]["body"], message["id"], message["from"],
+                                client_service["segmentations"], client_service["user_profile_data"])
+        if client_service['isSummary']:
+            pass
         if client_service['isLogin']:
             await self.handle_login(message)
         elif client_service['isWelcome']:

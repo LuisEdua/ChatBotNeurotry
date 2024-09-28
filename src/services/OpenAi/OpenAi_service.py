@@ -45,6 +45,7 @@ class OpenAiService:
         - Si el cliente quiere información de su cuenta: {{ isAccountInformation: true }}
         - Si el cliente quiere logearse {{ isLogin: true }}
         - Si el cliente quiere ver sus pedidos: {{ isOrders: true }},
+        - Si el cliente quiere obtener un resumen de sus conversaciones: {{ isSummary: true }}
         - Si el cliente nos da información personal debes devolverla en un array de objetos JSON el json debe tener la llave user_profile_data y dentro de ella un array de objetos JSON con la llave data que tendrá un string y con la llave title que también será string.
         - Debes segmentar el mensaje en distintas categorías y devolver un array de objetos JSON con la llave segmentations y dentro de ella un array de objetos JSON con la llave name y data.
         - Para la segmentación todo mensaje debe ser segmentado, desde información basica como un saludo hasta información relevante como su situación sentimental, nada se debe dejar fuera.

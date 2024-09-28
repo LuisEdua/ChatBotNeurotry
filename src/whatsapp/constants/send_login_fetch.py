@@ -7,6 +7,9 @@ async def send_login_fetch(to: str) -> Any:
     url = os.getenv('FACEBOOK_API_URL')
     token = os.getenv('FACEBOOK_API_TOKEN')
 
+    if not url or not token:
+        raise ValueError("FACEBOOK_API_URL or FACEBOOK_API_TOKEN environment variables are not set")
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -34,14 +37,14 @@ async def send_login_fetch(to: str) -> Any:
                 "parameters": {
                     "flow_message_version": "3",
                     "flow_action": "navigate",
-                    "flow_token": "<FLOW_TOKEN>",
-                    "flow_id": "YOUR_LOGIN_FLOW_ID",  # Reemplaza con tu flow ID específico
+                    "flow_token": os.getenv('FLOW_TOKEN'),  # Ensure this is set in your environment
+                    "flow_id": os.getenv('LOGIN_FLOW_ID'),  # Ensure this is set in your environment
                     "flow_cta": "Iniciar sesión",
                     "mode": "draft",
                     "flow_action_payload": {
-                        "screen": "LOGIN_SCREEN",  # Pantalla de inicio de sesión
+                        "screen": "LOGIN_SCREEN",
                         "data": {
-                            "customvalue": "<CUSTOM_VALUE>",  # Reemplaza con valores personalizados si es necesario
+                            "customvalue": "<CUSTOM_VALUE>",
                         },
                     },
                 },
@@ -51,4 +54,9 @@ async def send_login_fetch(to: str) -> Any:
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, data=json.dumps(body))
-        return response.json()
+        response_data = response.json()
+
+        if response.status_code != 200:
+            raise Exception(f"Error {response.status_code}: {response_data}")
+
+        return response_data
