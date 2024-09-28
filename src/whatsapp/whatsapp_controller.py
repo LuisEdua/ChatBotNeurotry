@@ -1,5 +1,9 @@
+import os
+import httpx
+import json
+import re
 from flask import Blueprint, request, jsonify
-from pydantic import BaseModel
+from pydantic import BaseModel, constr, ValidationError
 from typing import Any, Dict
 from src.services.OpenAi.OpenAi_service import OpenAiService
 from src.services.gemini.gemini_service import GoogleAiService
@@ -9,10 +13,12 @@ from src.services.Encrytation.Encryptation import EncryptationService
 
 whatsapp_controller = Blueprint('whatsapp_controller', __name__)
 
-
 class WebhookMessageDto(BaseModel):
     entry: list
 
+class MessageDto(BaseModel):
+    from_: constr(regex=r'^\+\d{1,15}$')  # Número de teléfono con formato internacional
+    text: constr(strip_whitespace=True, min_length=1)  # Texto no vacío
 
 class WhatsappController:
     def __init__(self, model, cloudinary_service: CloudinaryService, encryptation_service: EncryptationService):
@@ -21,13 +27,24 @@ class WhatsappController:
     async def handle_message(self):
         message_dto = request.get_json()
         try:
-
             message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
-            await self.whatsapp_service.handle_message(message)
+
+            # Validar y limpiar la entrada
+            validated_message = self.validate_message(message)
+
+            await self.whatsapp_service.handle_message(validated_message)
 
             return jsonify({"status": "EVENT_RECEIVED"}), 200
-        except KeyError:
+        except (KeyError, ValidationError):
             return jsonify({"status": "Bad Request"}), 400
+
+    def validate_message(self, message: Dict[str, Any]) -> MessageDto:
+        # Extraer y limpiar campos relevantes
+        message_data = {
+            "from_": message.get("from"),
+            "text": message.get("text", {}).get("body", "").strip()
+        }
+        return MessageDto(**message_data)  # Validación de Pydantic
 
     def verify(self):
         verify_token = request.args.get("hub.verify_token")
@@ -59,13 +76,13 @@ encryptation_service = EncryptationService()
 whatsapp_controller_instance = WhatsappController(openai_service, cloudinary_service, encryptation_service)
 
 whatsapp_controller.add_url_rule('/whatsapp', 'handle_message', whatsapp_controller_instance.handle_message,
-                                 methods=['POST'])
+                                   methods=['POST'])
 whatsapp_controller.add_url_rule('/whatsapp', 'verify', whatsapp_controller_instance.verify, methods=['GET'])
 whatsapp_controller.add_url_rule('/whatsapp/payments/success', 'handle_payment_success',
-                                 whatsapp_controller_instance.handle_payment_success, methods=['GET'])
+                                   whatsapp_controller_instance.handle_payment_success, methods=['GET'])
 whatsapp_controller.add_url_rule('/whatsapp/payments/cancel', 'handle_payment_cancel',
-                                 whatsapp_controller_instance.handle_payment_cancel, methods=['GET'])
+                                   whatsapp_controller_instance.handle_payment_cancel, methods=['GET'])
 whatsapp_controller.add_url_rule('/whatsapp/payments/webhook', 'handle_payment_webhook',
-                                 whatsapp_controller_instance.handle_payment_webhook, methods=['POST'])
+                                   whatsapp_controller_instance.handle_payment_webhook, methods=['POST'])
 whatsapp_controller.add_url_rule('/whatsapp/flows/webhook', 'handle_flow_webhook',
-                                 whatsapp_controller_instance.handle_flow_webhook, methods=['POST'])
+                                   whatsapp_controller_instance.handle_flow_webhook, methods=['POST'])
