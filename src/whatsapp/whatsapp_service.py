@@ -87,6 +87,8 @@ class WhatsappService:
             await self.handle_login(message)
         elif client_service['isWelcome']:
             await self.is_welcome(message)
+        elif client_service['isSummary']:
+            await self.sumary(message)
         elif client_service['wantToBuy'] and not client_service['catalog']:
             await self.want_to_buy(message)
         elif client_service['isGivingThanks']:
@@ -213,3 +215,9 @@ class WhatsappService:
     async def get_next_screen(self, phone_number: str, intent: str):
         response = await get_next_screen(phone_number, intent)
         return response
+
+    async def sumary(self, message):
+        new_session = session()
+        messages = new_session.query(Message).filter(Message.number == message["from"]).all()
+        sumary = await self.model.generate_sumary(messages)
+        await send_message_fetch(sumary, message["from"])

@@ -36,6 +36,27 @@ class OpenAiService:
         )
         return response.choices[0].message['content']
 
+    async def generate_sumary(self, messages):
+        prompt = f"""Voy a darte un arrar de mensajes y quiero me hagas un resumen de la conversación: {messages}
+        Incluye toda la información relevante
+        - Quiero que el resumen sea conciso y no contenga información redundante
+        - Quiero saber cuantos mensajes hubo en el día
+        - 
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            choice_string = response.choices[0].message.content
+            print(choice_string)
+            return json.loads(choice_string)
+        except Exception as error:
+            print(error)
+            return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False,
+                                    is_account_information=False, is_orders=False, catalog=None)
+
+
     async def evaluate_client_response(self, message_to_evaluate: str) -> MessageEvaluated:
         prompt = f"""Voy a darte un mensaje de un cliente y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Evalúa el mensaje según los siguientes parámetros:
         - Si el cliente está saludando o es alguien nuevo: {{ isWelcome: true }}
