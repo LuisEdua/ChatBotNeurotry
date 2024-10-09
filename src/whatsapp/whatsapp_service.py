@@ -1,8 +1,8 @@
-
 import os
 import json
 import stripe
 from typing import List, Any
+from datetime import datetime, timedelta
 from src.services.db.connection import Session as session, Message, Segmentations, UserProfile
 from src.services.Encrytation.Encryptation import EncryptationService
 from src.services.Cloudinary.cloudinary_service import CloudinaryService
@@ -77,29 +77,41 @@ class WhatsappService:
                     await send_message_fetch("Ocurrió un error al registrar tu cuenta, intenta de nuevo 🙏", message["from"])
 
     async def handle_text_message(self, message: MessageDto):
-        logging.info(f"Handling text message from: {message['from']}")
-        client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
-        await self.save_message(message["text"]["body"], message["id"], message["from"],
-                                client_service["segmentations"], client_service["user_profile_data"])
-        if client_service['isSummary']:
-            pass
-        elif client_service['isLogin']:
-            await self.handle_login(message)
-        elif client_service['isWelcome']:
-            await self.is_welcome(message)
-        elif client_service['isSummary']:
-            await self.sumary(message)
-        elif client_service['wantToBuy'] and not client_service['catalog']:
-            await self.want_to_buy(message)
-        elif client_service['isGivingThanks']:
-            await self.is_thanks(message)
-        elif client_service['isAccountInformation']:
-            await self.is_account_information(message)
-        elif client_service['wantToBuy'] and client_service['catalog']:
-            products = await self.model.evaluate_extracted_products(client_service.catalog)
-            await self.handle_buy_product(message, products)
-        else:
-            await self.did_not_understand(message)
+        try:
+            if self.validate_message(message):
+                client_service = await self.model.evaluate_client_response(message["text"]["body"].lower())
+                print(client_service)
+                if not client_service['error']:
+                    await self.save_message(message["text"]["body"], message["id"], message["from"],
+                                            client_service["segmentations"], client_service["userProfileData"])
+                    if client_service['isAttack']:
+                        await self.send_message("Lo siento, no puedo responder a ese tipo de mensajes.", message["from"])
+                    elif client_service['isSummary']:
+                        await self.generate_summary(message)
+                    elif client_service['isRegister']:
+                        await self.send_message("Por favor, proporciona tus credenciales para registrarte.", message["from"])
+                        await self.send_registration_message(message["from"])
+                    elif client_service['isLogin']:
+                        await self.handle_login(message)
+                    elif client_service['wantToRecommend']:
+                        await self.recommentdation(message)
+                    elif client_service['isWelcome']:
+                        await self.is_welcome(message)
+                    elif client_service['isSummary']:
+                        await self.sumary(message)
+                    elif client_service['wantToBuy'] and not client_service['catalog']:
+                        await self.want_to_buy(message)
+                    elif client_service['isGivingThanks']:
+                        await self.is_thanks(message)
+                    elif client_service['isAccountInformation']:
+                        await self.is_account_information(message)
+                    elif client_service['wantToBuy'] and client_service['catalog']:
+                        products = await self.model.evaluate_extracted_products(client_service["catalog"])
+                        await self.handle_buy_product(message, products)
+                    else:
+                        await self.did_not_understand(message)
+        except Exception as error:
+            print(error)
 
     async def handle_login(self, message: MessageDto):
         logging.info(f"User {message['from']} is attempting to log in.")
@@ -124,7 +136,8 @@ class WhatsappService:
 
     async def did_not_understand(self, message: MessageDto):
         logging.info(f"Message not understood from: {message['from']}")
-        await send_message_fetch("Lo siento, no entendí tu mensaje, ¿puedes repetirlo? 🙏", message["from"])
+        response = await self.model.message_not_understood(message["text"]["body"])
+        await send_message_fetch(response, message["from"])
 
     async def save_message(self, message: str, message_id: str, number: str, segs, user_profile):
         session_instance = session()
@@ -221,3 +234,35 @@ class WhatsappService:
         messages = new_session.query(Message).filter(Message.number == message["from"]).all()
         sumary = await self.model.generate_sumary(messages)
         await send_message_fetch(sumary, message["from"])
+
+    async def generate_summary(self, message):
+        last_24_hours = datetime.now() - timedelta(hours=24)
+        new_session = session()
+        messages = new_session.query(Message).filter(
+            Message.number == message["from"],
+            Message.create_at >= last_24_hours
+        ).all()
+        sumary = await self.model.generate_sumary(messages)
+        await send_message_fetch(sumary, message["from"])
+
+    async def recommentdation(self, message):
+        new_session = session()
+        products = new_session.query(Product).all()
+        products_to_recomment = [{"id": p["id"], "name": p["name"]} for p in products]
+        profile_data = new_session.query(UserProfile).filter(UserProfile.phone == message["from"]).all()
+        data = [d.data for d in profile_data]
+        recomendation = self.model.generate_recomendation(products_to_recomment, data)
+        products_list_images = [
+            {"id": product.id, "title": product.name, "description": f"${product.price}", "image": product.image} for
+            product in products if product.id in recomendation]
+        if products_list_images:
+            await send_catalog_fetch(message["from"], {"products": products_list_images})
+        else:
+            response = await self.model.personalize_message("No hay productos para recomendarte")
+            await send_message_fetch(response, message["from"])
+
+    def validate_message(self, message):
+        new_session = session()
+        if not new_session.query(Message).filter(Message.whatsapp_id == message["id"]).first():
+            return True
+        return False

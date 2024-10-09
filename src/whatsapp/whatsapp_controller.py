@@ -49,17 +49,14 @@ class WhatsappController:
 
     async def handle_message(self):
         message_dto = request.get_json()
-        #try:
-        message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
+        try:
+            message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
 
-        # Validar y limpiar la entrada
-        validated_message = self.validate_message(message)
+            await self.whatsapp_service.handle_message(message)
 
-        await self.whatsapp_service.handle_message(validated_message)
-
-        return jsonify({"status": "EVENT_RECEIVED"}), 200
-        """except (KeyError, ValidationError):
-            return jsonify({"status": "Bad Request"}), 400"""
+            return jsonify({"status": "EVENT_RECEIVED"}), 200
+        except (KeyError, ValidationError):
+            return jsonify({"status": "Bad Request"}), 400
 
     def validate_message(self, message: Dict[str, Any]) -> MessageDto:
         # Extraer y limpiar campos relevantes

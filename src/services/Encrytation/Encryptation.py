@@ -1,6 +1,4 @@
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from base64 import b64decode, b64encode
@@ -9,7 +7,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from os import urandom
 import base64
-import binascii
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 
 class EncryptationService:
 
@@ -94,7 +93,7 @@ class EncryptationService:
         salt = urandom(16)
 
         # Derivar una clave utilizando PBKDF2
-        kdf = hashes.PBKDF2HMAC(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
@@ -113,7 +112,7 @@ class EncryptationService:
         stored_key = decoded[16:]
 
         # Derivar la clave usando el mismo salt
-        kdf = hashes.PBKDF2HMAC(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,

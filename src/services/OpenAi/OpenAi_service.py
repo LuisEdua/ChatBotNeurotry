@@ -41,7 +41,16 @@ class OpenAiService:
         Incluye toda la información relevante
         - Quiero que el resumen sea conciso y no contenga información redundante
         - Quiero saber cuantos mensajes hubo en el día
-        - 
+        - Quiero saber que tipo de operaciones se hicieron en el día
+        - Quiero saber si hubo algún problema en la conversación
+        - Quiero saber si hubo algún mensaje de agradecimiento
+        - Quiero saber si hubo algún mensaje de bienvenida
+        - Quiero saber si hubo algún mensaje de despedida
+        - Quiero saber si hubo algún mensaje de error
+        - Quiero saber si hubo algún mensaje de compra
+        - Quiero saber si hubo algún mensaje de información de cuenta
+        - Quiero saber si hubo algún mensaje de información de pedidos
+        **IMPORTANTE**: Quiero que únicamente me devuelvas el resumen sin ningún texto adicional, no quiero que pidas información u otra cosa, solo el resumen, sin las instrucciones que te dí, solo la información y ya.
         """
         try:
             response = self.client.chat.completions.create(
@@ -49,15 +58,13 @@ class OpenAiService:
                 messages=[{"role": "system", "content": prompt}]
             )
             choice_string = response.choices[0].message.content
-            print(choice_string)
-            return json.loads(choice_string)
+            return choice_string
         except Exception as error:
             print(error)
-            return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False,
-                                    is_account_information=False, is_orders=False, catalog=None)
+            return "Error al generar el resumen"
 
 
-    async def evaluate_client_response(self, message_to_evaluate: str) -> MessageEvaluated:
+    async def evaluate_client_response(self, message_to_evaluate: str) -> dict[str | Any, bool | Any] | Any:
         prompt = f"""Voy a darte un mensaje de un cliente y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Evalúa el mensaje según los siguientes parámetros:
         - Si el cliente está saludando o es alguien nuevo: {{ isWelcome: true }}
         - Si el cliente quiere comprar algo o ver el catalogo de productos: {{ wantToBuy: true }}
@@ -65,22 +72,30 @@ class OpenAiService:
         - Si el cliente está agradeciendo o dando las gracias: {{ isGivingThanks: true }}
         - Si el cliente quiere información de su cuenta: {{ isAccountInformation: true }}
         - Si el cliente quiere logearse {{ isLogin: true }}
+        - Si el cliente quiere registrarse {{ isRegister: true }}
         - Si el cliente quiere ver sus pedidos: {{ isOrders: true }},
         - Si el cliente quiere obtener un resumen de sus conversaciones: {{ isSummary: true }}
-        - Si el cliente nos da información personal debes devolverla en un array de objetos JSON el json debe tener la llave user_profile_data y dentro de ella un array de objetos JSON con la llave data que tendrá un string y con la llave title que también será string.
+        - Si detectas que el mensaje tiene inyección SQL o algún tipo de ataque {{ isAttack: True }}
+        - Si el cliente quiere que le recomiendes algo {{ wantToRecommend: True }}
+        - Si el cliente nos da información personal debes devolverla en un array de objetos JSON el json debe tener la llave userProfileData y dentro de ella un array de objetos JSON con la llave data que tendrá un string y con la llave title que también será string.
         - Debes segmentar el mensaje en distintas categorías y devolver un array de objetos JSON con la llave segmentations y dentro de ella un array de objetos JSON con la llave name y data.
         - Para la segmentación todo mensaje debe ser segmentado, desde información basica como un saludo hasta información relevante como su situación sentimental, nada se debe dejar fuera.
         - Para el perfil de usuario, si el cliente no proporciona información releventate el arreglo debe quedar vacio.
         El JSON debe seguir este formato exacto:
         {{
+          "error": false,
+          "isAttack": false,
           "isWelcome": false,
           "wantToBuy": false,
           "isGivingThanks": false,
           "isAccountInformation": false,
+          "isSummary": false,
           "isOrders": false,
           "catalog": null,
+          "wantToRecommend": false,
           "isLogin": false,
-          "user_profile_data":[
+          "isRegister": false,
+          "userProfileData":[
             {{
                 "title": null,
                 "data": null,
@@ -102,11 +117,15 @@ class OpenAiService:
                 messages=[{"role": "system", "content": prompt}]
             )
             choice_string = response.choices[0].message.content
-            return json.loads(choice_string)
+            cleaned_choice_string = choice_string.strip('```json\n').strip('\n```')
+            return json.loads(cleaned_choice_string)
         except Exception as error:
             print(error)
-            return MessageEvaluated(is_welcome=False, want_to_buy=False, is_giving_thanks=False,
-                                    is_account_information=False, is_orders=False, catalog=None)
+            return {"error": True, "isAttack": False, "isWelcome": False, "wantToBuy": False, "isGivingThanks": False,
+                    "isAccountInformation": False, "isSummary": False, "isOrders": False, "catalog": None,
+                    "wantToRecommend": False, "isLogin": False, "isRegister": False,
+                    "userProfileData": [],
+                    "segmentations": []}
 
     def convert_products_to_json(self, text: str) -> List[Product]:
         cleaned_text = text.replace('```json', '').replace('```', '').strip()
@@ -116,8 +135,30 @@ class OpenAiService:
         cleaned_text = text.replace('```json', '').replace('```', '').strip()
         return json.loads(cleaned_text)
 
+    async def message_not_understood(self, message: str) -> str:
+        prompt = f"""Voy a darte un mensaje que no entendí y quiero que me devuelvas **únicamente** un mensaje que le podríamos enviar al cliente para decirle que no entendimos su mensaje. 
+        Aquí está el mensaje que no entendí: "{message}". Puedes agregar algún mensaje de disculpa y puedes utilizar emojis para hacerlo más amigable. 
+        Trata de no extenderte mucho en la respuesta.
+        Nos especializamos en vender productos
+        Puedes responder a lo que el cliente te diga
+        El bot se llama Duna
+        Por ejemplo puedes decirle,
+        Buenos dias/tardes/noches, estoy aquí para ayudarte con tus compras, información de cuenta, pedidos, resumen de conversaciones y recomendaciones, ¿En qué puedo ayudarte hoy?
+        Las opciones dalas como un menú para que el cliente pueda elegir, pero tiene que ser en lista no enumerada.
+        IMPORTANTE: En caso de poder primero respondele al cliente y luego dale la información que te pedí.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as error:
+            print(error)
+            return ""
+
     async def evaluate_extracted_products(self, products: List[Dict[str, Union[str, int, float]]]) -> List[Product]:
-        existing_products = await self.product.find_many()
+        existing_products = self.db_session.query(Product).all()
         prompt = f"""Voy a darte un array de productos y quiero que me devuelvas **únicamente** un objeto JSON que indique lo que el cliente quiere. Este es el array de productos existentes: {json.dumps(existing_products)}, ahora quiero que me devuelvas un array JSON con los productos que el cliente quiere según los productos existentes. Ejemplo: [{{id: '12', name: "product_name", quantity: 1, price: 1}}] IMPORTANTE: Quiero que únicamente me devuelvas el objeto JSON sin ningún texto adicional. Aquí está el array de productos que quiero que analices: {json.dumps(products)}"""
         try:
             response = self.client.chat.completions.create(
@@ -213,6 +254,40 @@ class OpenAiService:
         except Exception as error:
             print(error)
             return {}
+
+
+    async def generate_recomendation(self, products, user_data: List[str]):
+        prompt = f"""Voy a darte un array de productos y un array con información del usuario y quiero que me devuelva **únicamente**
+        un array con los id de los productos que le recomendariamos al usuario.
+        Aquí está el array de productos: {products}
+        Aquí está el array de información del usuario: {user_data}
+        Debes tomar en cuenta la temporada en la que estamos así como si en la información del usuario hay información sobre su ubicación tomala en cuenta
+        Debes tomar en cuenta la información del usuario para hacer la recomendación
+        Toma en cuenta festividades o cosas relacionadas con la temporada
+        IMPORTANTE: Quiero que únicamente me devuelvas el array de productos sin ningún texto adicional."""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            respuesta = response.choices[0].text
+            print(respuesta)
+        except Exception as error:
+            print(error)
+            return []
+
+
+    async def personalize_message(self, message):
+        prompt = f"""Te voy a dar un mensaje generico y quiero que lo hagas un poco más ineractivo, quiero que me devuelvas **únicamente** el mensaje personalizado. {message}"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as error:
+            print(error)
+
 
     async def generate_feedback_message(self, feedback: str, client: str) -> str:
         prompt = f"""Voy a darte un mensaje de feedback del cliente y quiero que me devuelvas **únicamente la respuesta que podríamos darle al cliente**. Aquí está el mensaje de feedback: "{feedback}". Recalcarle que es importante que estamos al tanto de su opinión y que estamos trabajando para mejorar nuestros servicios. Puedes agregar al feedback el nombre del cliente para hacerlo más personalizado. No olvides que la respuesta que me des debe de ser relacionada con el feedback del cliente. El nombre del cliente es: "{client}". También puedes agregar algún mensaje de agradecimiento y puedes utilizar emojis para hacerlo más amigable. Trata de no extenderte mucho en la respuesta."""
