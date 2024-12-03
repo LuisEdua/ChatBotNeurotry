@@ -1,33 +1,97 @@
 import os
 from dotenv import load_dotenv
-import psycopg2
-from psycopg2 import sql
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine, Column, String, Float, DateTime, ForeignKey, Boolean, Integer
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
+import uuid
 
-def get_db_connection():
-    # Cargar las variables de entorno desde el archivo .env
-    load_dotenv()
+# Cargar las variables de entorno
+load_dotenv()
 
-    # Obtener las variables de conexión a la base de datos desde las variables de entorno
-    db_user = os.getenv('DB_USER')
-    db_password = os.getenv('DB_PASSWORD')
-    db_host = os.getenv('DB_HOST')
-    db_port = os.getenv('DB_PORT')
-    db_name = os.getenv('DB_NAME')
-    db_sslmode = os.getenv('DB_SSLMODE')
+# Definir las variables de la base de datos
+db_user = os.getenv('DB_USER')
+db_password = os.getenv('DB_PASSWORD')
+db_host = os.getenv('DB_HOST')
+db_port = os.getenv('DB_PORT')
+db_name = os.getenv('DB_NAME')
+db_sslmode = os.getenv('DB_SSLMODE')
 
-    # Establecer la conexión a la base de datos
-    try:
-        connection = psycopg2.connect(
-            user=db_user,
-            password=db_password,
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            sslmode=db_sslmode
-        )
-        print("Conexión a la base de datos establecida correctamente")
-        return connection
+# Crear la URL de la base de datos
+db_url = f"cockroachdb://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?sslmode={db_sslmode}"
 
-    except Exception as error:
-        print(f"Error al conectar a la base de datos: {error}")
-        return None
+# Crear el motor y la sesión
+engine = create_engine(db_url)
+Session = scoped_session(sessionmaker(bind=engine))
+session = Session()
+
+# Definir la base declarativa
+Base = declarative_base()
+
+# Definir todos los modelos
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    name = Column(String)
+    email = Column(String, unique=True)
+    password = Column(String)
+    phone = Column(String, unique=True)
+    flows = relationship('Flow', back_populates='user')
+    createdAt = Column(DateTime, default=func.now())
+    updatedAt = Column(DateTime, onupdate=func.now())
+
+class Flow(Base):
+    __tablename__ = 'flows'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    flowId = Column(String)
+    name = Column(String)
+    userId = Column(String, ForeignKey('users.id'))
+    user = relationship('User', back_populates='flows')
+    createdAt = Column(DateTime, default=func.now())
+    updatedAt = Column(DateTime, onupdate=func.now())
+
+class Message(Base):
+    __tablename__ = 'messages'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    whatsapp_id = Column(String)
+    number = Column(String)
+    text = Column(String)
+    create_at = Column(DateTime, default=func.now())
+
+class UserProfile(Base):
+    __tablename__ = 'user_profile'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    phone = Column(String)
+    title = Column(String)
+    data = Column(String)
+
+class Segmentations(Base):
+    __tablename__ = 'segmentations'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    phone = Column(String)
+    title = Column(String)
+    data = Column(String)
+
+class Product(Base):
+    __tablename__ = 'products'
+    id = Column(String, primary_key=True, default=uuid.uuid4)
+    name = Column(String)
+    price = Column(Float)
+    image = Column(String)
+    createdAt = Column(DateTime, default=func.now())
+    updatedAt = Column(DateTime, onupdate=func.now())
+
+class MessageEvaluated(Base):
+    __tablename__ = 'message_evaluated'
+    id = Column(String, primary_key=True)
+    is_welcome = Column(Boolean)
+    want_to_buy = Column(Boolean)
+    is_giving_thanks = Column(Boolean)
+    is_account_information = Column(Boolean)
+    is_orders = Column(Boolean)
+    catalog = Column(String)
+
+# Crear todas las tablas en la base de datos
+Base.metadata.create_all(bind=engine)
