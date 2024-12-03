@@ -26,6 +26,24 @@ class OpenAiService:
         self.db_session = session()
 
 
+    async def generate_seller_information(self, seller: Dict[str, str]) -> str:
+        prompt = f"""Voy a darte un objeto JSON con información de un vendedor y quiero que me devuelvas la información más
+        importante, cosas que podrían interesarle al vendedor sobre su perfil. 
+        Aquí está el objeto JSON con la información del vendedor: {json.dumps(seller)}
+        IMPORTANTE: Quiero que únicamente me devuelvas la información más relevante, no quiero que me devuelvas el objeto JSON completo.
+        No quiero que puntualices la información, ponlo a manera de resumen y sin texto adicional.
+        Además procura no devolver información sensible si puedes poner cosas como enlaces."""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as error:
+            print(error)
+            return ""
+
+
     async def generate_text(self, history: List[Dict[str, Any]], model: str = "text-davinci-003") -> str:
         messages = [{"role": "system", "content": "You are a helpful assistant."}]
         for message in history:
@@ -37,20 +55,16 @@ class OpenAiService:
         return response.choices[0].message['content']
 
     async def generate_sumary(self, messages):
-        prompt = f"""Voy a darte un arrar de mensajes y quiero me hagas un resumen de la conversación: {messages}
-        Incluye toda la información relevante
-        - Quiero que el resumen sea conciso y no contenga información redundante
-        - Quiero saber cuantos mensajes hubo en el día
-        - Quiero saber que tipo de operaciones se hicieron en el día
-        - Quiero saber si hubo algún problema en la conversación
-        - Quiero saber si hubo algún mensaje de agradecimiento
-        - Quiero saber si hubo algún mensaje de bienvenida
-        - Quiero saber si hubo algún mensaje de despedida
-        - Quiero saber si hubo algún mensaje de error
-        - Quiero saber si hubo algún mensaje de compra
-        - Quiero saber si hubo algún mensaje de información de cuenta
-        - Quiero saber si hubo algún mensaje de información de pedidos
-        **IMPORTANTE**: Quiero que únicamente me devuelvas el resumen sin ningún texto adicional, no quiero que pidas información u otra cosa, solo el resumen, sin las instrucciones que te dí, solo la información y ya.
+        prompt = f"""Voy a darte un array de mensajes y quiero me hagas un resumen de la conversación: {messages}
+        Incluye toda la información relevante relacionada a:
+        - Cuantos mensajes hubo en el día
+        - Que tipo de operaciones se hicieron en el día
+        - Problemas en la conversación
+        - Errores
+        - Intenciones de compra, transancciones de compra o información de pedidos.
+        - Información relevante del usuario o la cuenta
+        - El sentimiento general de la conversación
+        **IMPORTANTE**: Quiero que únicamente me devuelvas el resumen, no quiero que pidas información, solo el resumen, sin las instrucciones que te dí, solo la información y ya.
         """
         try:
             response = self.client.chat.completions.create(
@@ -58,6 +72,9 @@ class OpenAiService:
                 messages=[{"role": "system", "content": prompt}]
             )
             choice_string = response.choices[0].message.content
+            for message in messages:
+                print(message)
+            print(choice_string)
             return choice_string
         except Exception as error:
             print(error)
@@ -73,7 +90,9 @@ class OpenAiService:
         - Si el cliente quiere información de su cuenta: {{ isAccountInformation: true }}
         - Si el cliente quiere logearse {{ isLogin: true }}
         - Si el cliente quiere registrarse {{ isRegister: true }}
+        - Si el cliente quiere ver su información como vendedor: {{ isSellerInformation: true }}
         - Si el cliente quiere ver sus pedidos: {{ isOrders: true }},
+        - Si el cliente quiere ver los productos que tiene publicados: {{ isWantToSeeProducts: true }}
         - Si el cliente quiere obtener un resumen de sus conversaciones: {{ isSummary: true }}
         - Si detectas que el mensaje tiene inyección SQL o algún tipo de ataque {{ isAttack: True }}
         - Si el cliente quiere que le recomiendes algo {{ wantToRecommend: True }}
@@ -89,10 +108,12 @@ class OpenAiService:
           "wantToBuy": false,
           "isGivingThanks": false,
           "isAccountInformation": false,
+          "isSellerInformation": false,
           "isSummary": false,
           "isOrders": false,
           "catalog": null,
           "wantToRecommend": false,
+          "isWantToSeeProducts": false,
           "isLogin": false,
           "isRegister": false,
           "userProfileData":[
@@ -152,6 +173,7 @@ class OpenAiService:
                 model="gpt-4o",
                 messages=[{"role": "system", "content": prompt}]
             )
+            print(response)
             return response.choices[0].message.content
         except Exception as error:
             print(error)
@@ -165,7 +187,7 @@ class OpenAiService:
                 model="gpt-4o",
                 messages=[{"role": "system", "content": prompt}]
             )
-            return self.convert_products_to_json(response.choices[0].text)
+            return self.convert_products_to_json(response.choices[0].content)
         except Exception as error:
             print(error)
             return []
@@ -247,7 +269,158 @@ class OpenAiService:
                 model="gpt-4o",
                 messages=[{"role": "system", "content": prompt}]
             )
-            json_generated = self.convert_to_json_object(response.choices[0].text)
+            print(response)
+            json_generated = self.convert_to_json_object(response.choices[0].message.content)
+            print("Json generate: ", json_generated.keys())
+            for i in range(len(json_generated['screens'][0]['data']['products']['__example__'])):
+                json_generated['screens'][0]['data']['products']['__example__'][i] = products[i]
+            print("Json generate updated: ", json_generated)
+            return json_generated
+        except Exception as error:
+            print(error)
+            return {}
+
+
+    async def generate_json_products_catalog_admin(self, products_with_urls:List[Dict[str, str]],products: List[Dict[str, str]]) -> Dict[str, Any]:
+        prompt = f"""Voy a darte un prompt y quiero que me devuelvas **únicamente** un objeto JSON que reemplace el contenido de un objeto JSON con un array de productos en la base de datos del esquema que te proporciono. Este es el arreglo de productos que quiero reemplazar en `__example__`, donde cada producto contiene la URL de su imagen: {json.dumps(products_with_urls)}. Este es el objeto JSON que debes ajustar:
+
+        {{
+            "version": "5.0",
+            "data_api_version": "3.0",
+            "routing_model": {{
+                "CATALOG": [
+                    "SUMMARY"
+                ]
+            }},
+            "screens": [
+                {{
+                    "id": "CATALOG",
+                    "title": "Catálogo",
+                    "terminal": true,
+                    "data": {{
+                        "catalog_heading": {{
+                            "type": "string",
+                            "__example__": "Elige los productos para realizar tu pedido"
+                        }},
+                        "products": {{
+                            "type": "array",
+                            "items": {{
+                                "type": "object",
+                                "properties": {{
+                                    "id": {{
+                                        "type": "string"
+                                    }},
+                                    "title": {{
+                                        "type": "string"
+                                    }},
+                                    "description": {{
+                                        "type": "string"
+                                    }},
+                                    "image": {{
+                                        "type": "string",
+                                        "__example__": "https://example.com/image.png"
+                                    }}
+                                }}
+                            }},
+                            "__example__": [
+                                {{
+                                    "id": "1",
+                                    "title": "Vue",
+                                    "description": "$299",
+                                    "image": "https://example.com/vue.png"
+                                }}
+                            ]
+                        }}
+                    }},
+                    "layout": {{
+                        "type": "SingleColumnLayout",
+                        "children": [
+                            {{
+                                "type": "Form",
+                                "name": "form",
+                                "children": [
+                                    {{
+                                        "type": "Footer",
+                                        "label": "Continuar",
+                                        "on-click-action": {{
+                                            "name": "data_exchange",
+                                            "payload": {{
+                                                "products": "${{data.products}}"
+                                            }}
+                                        }}
+                                    }}
+                                ]
+                            }}
+                        ]
+                    }}
+                }},
+                {{
+                    "id": "SUMMARY",
+                    "title": "Resumen",
+                    "terminal": true,
+                    "data": {{
+                        "products": {{
+                            "type": "array",
+                            "items": {{
+                                "type": "object",
+                                "properties": {{
+                                    "id": {{
+                                        "type": "string"
+                                    }},
+                                    "title": {{
+                                        "type": "string"
+                                    }},
+                                    "description": {{
+                                        "type": "string"
+                                    }},
+                                    "image": {{
+                                        "type": "string",
+                                        "__example__": "https://example.com/image.png"
+                                    }}
+                                }}
+                            }},
+                            "__example__": [
+                                {{
+                                    "id": "66cec08fde7ed5384303a650",
+                                    "title": "Vue",
+                                    "description": "$299",
+                                    "image": "https://example.com/vue.png"
+                                }}
+                            ]
+                        }}
+                    }},
+                    "layout": {{
+                        "type": "SingleColumnLayout",
+                        "children": [
+                            {{
+                                "type": "Form",
+                                "name": "final_form",
+                                "children": [
+                                    {{
+                                        "type": "Footer",
+                                        "label": "Finalizar",
+                                        "on-click-action": {{
+                                            "name": "complete",
+                                            "payload": {{
+                                                "products": "${{data.products}}"
+                                            }}
+                                        }}
+                                    }}
+                                ]
+                            }}
+                        ]
+                    }}
+                }}
+            ]
+        }}
+
+        Reemplaza el contenido del arreglo `__example__` en ambos nodos `products` con los productos que te proporciono, incluyendo las URLs de las imágenes, y devuelve el resultado como un objeto JSON. No quiero texto adicional, solo el JSON actualizado."""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            json_generated = self.convert_to_json_object(response.choices[0].message.content)
             for i in range(len(json_generated['screens'][0]['data']['products']['__example__'])):
                 json_generated['screens'][0]['data']['products']['__example__'][i] = products[i]
             return json_generated
@@ -257,11 +430,11 @@ class OpenAiService:
 
 
     async def generate_recomendation(self, products, user_data: List[str]):
-        prompt = f"""Voy a darte un array de productos y un array con información del usuario y quiero que me devuelva **únicamente**
+        prompt = f"""Voy a darte un array de productos y un array con información del usuario y quiero que me devuelvas **únicamente**
         un array con los id de los productos que le recomendariamos al usuario.
         Aquí está el array de productos: {products}
         Aquí está el array de información del usuario: {user_data}
-        Debes tomar en cuenta la temporada en la que estamos así como si en la información del usuario hay información sobre su ubicación tomala en cuenta
+        Debes tomar en cuenta la temporada en la que estamos así como si en la información del usuario, si hay información sobre su ubicación tomala en cuenta
         Debes tomar en cuenta la información del usuario para hacer la recomendación
         Toma en cuenta festividades o cosas relacionadas con la temporada
         IMPORTANTE: Quiero que únicamente me devuelvas el array de productos sin ningún texto adicional."""

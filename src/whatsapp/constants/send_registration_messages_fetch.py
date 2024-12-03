@@ -21,7 +21,7 @@ async def send_registration_fetch(to: str) -> Any:
             "type": "flow",
             "header": {
                 "type": "text",
-                "text": "Registrate",
+                "text": "Registra   te",
             },
             "body": {
                 "text": "Continua y registrate para poder acceder a nuestros productos y servicios",

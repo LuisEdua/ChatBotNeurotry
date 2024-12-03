@@ -15,7 +15,10 @@ from src.whatsapp.interfaces.register_response_interface import RegisterResponse
 from src.whatsapp.dtos.message import MessageDto
 from src.services.db.connection import User, Product
 from src.whatsapp.constants.send_login_fetch import send_login_fetch
+from src.whatsapp.constants.send_data_admin import send_catalog_admin_fetch
 import logging
+import requests
+import base64
 
 # Configura la clave de API de Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET')
@@ -39,11 +42,14 @@ class WhatsappService:
             raise ValueError("Invalid verify token")
 
     async def handle_message(self, message_dto: Any):
-        logging.info(f"Handling message of type: {message_dto['type']}")
-        if message_dto["type"] == "text":
+        type = message_dto.get("type", None)
+        logging.info(f"Handling message of type: {type}")
+        if type == "text":
             await self.handle_text_message(message_dto)
-        elif message_dto["type"] == "interactive":
+        elif type == "interactive":
             await self.handle_interactive_message(message_dto)
+        else:
+            logging.info("Message type not supported.")
 
     async def handle_interactive_message(self, message: InteractiveMessage):
         logging.info(f"Handling interactive message from: {message['from']}")
@@ -86,6 +92,10 @@ class WhatsappService:
                                             client_service["segmentations"], client_service["userProfileData"])
                     if client_service['isAttack']:
                         await self.send_message("Lo siento, no puedo responder a ese tipo de mensajes.", message["from"])
+                    elif client_service['isWantToSeeProducts']:
+                        await self.want_to_see_products(message)
+                    elif client_service['isSellerInformation']:
+                        await self.send_seller_information(message)
                     elif client_service['isSummary']:
                         await self.generate_summary(message)
                     elif client_service['isRegister']:
@@ -97,8 +107,6 @@ class WhatsappService:
                         await self.recommentdation(message)
                     elif client_service['isWelcome']:
                         await self.is_welcome(message)
-                    elif client_service['isSummary']:
-                        await self.sumary(message)
                     elif client_service['wantToBuy'] and not client_service['catalog']:
                         await self.want_to_buy(message)
                     elif client_service['isGivingThanks']:
@@ -114,6 +122,7 @@ class WhatsappService:
             print(error)
 
     async def handle_login(self, message: MessageDto):
+        print("Handling login")
         logging.info(f"User {message['from']} is attempting to log in.")
         # Here you can add the logic for handling user login, e.g., verifying credentials.
         await send_login_fetch(message["from"])
@@ -229,20 +238,16 @@ class WhatsappService:
         response = await get_next_screen(phone_number, intent)
         return response
 
-    async def sumary(self, message):
-        new_session = session()
-        messages = new_session.query(Message).filter(Message.number == message["from"]).all()
-        sumary = await self.model.generate_sumary(messages)
-        await send_message_fetch(sumary, message["from"])
 
     async def generate_summary(self, message):
-        last_24_hours = datetime.now() - timedelta(hours=24)
+        last_24_hours = datetime.now() - timedelta(hours=48)
         new_session = session()
         messages = new_session.query(Message).filter(
             Message.number == message["from"],
             Message.create_at >= last_24_hours
         ).all()
-        sumary = await self.model.generate_sumary(messages)
+        data = [m.text for m in messages]
+        sumary = await self.model.generate_sumary(data)
         await send_message_fetch(sumary, message["from"])
 
     async def recommentdation(self, message):
@@ -266,3 +271,85 @@ class WhatsappService:
         if not new_session.query(Message).filter(Message.whatsapp_id == message["id"]).first():
             return True
         return False
+
+    async def want_to_see_products(self, message):
+        await send_message_fetch("Enseguida te muestro tus publicaciones de Mercado Libre 🛍️", message["from"])
+        products = await self.find_items()
+        products_list = []
+        for product in products:
+            print(product)
+            product_data = await self.get_product_data(product)
+            product_description = await self.get_product_description(product)
+            product_image = await self.get_image(product_data.get("pictures")[0].get("url"))
+            product_obj = {"id": product_data.get("id"), "title": product_data.get("title"), "description": product_description, "image": product_image}
+            products_list.append(product_obj)
+        await send_catalog_admin_fetch(message["from"], {"products": products_list})
+
+    async def find_items(self):
+        url = "https://api.mercadolibre.com/users/712867753/items/search"
+
+        payload = ""
+        headers = {
+            'Authorization': 'Bearer APP_USR-1293961224444856-120203-e5c3d5a9676b0986078d4e2486fcd073-712867753'
+        }
+
+        response = requests.request("GET", url, headers=headers, data=payload)
+        if response.status_code == 200:
+            return response.json().get("results")
+        else:
+            return []
+
+    async def get_product_data(self, product):
+        url = f"https://api.mercadolibre.com/items/{product}"
+
+        payload = {}
+        headers = {}
+
+        response = requests.request("GET", url, headers=headers, data=payload)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {}
+
+    async def get_product_description(self, product):
+        url = f"https://api.mercadolibre.com/items/{product}/description"
+
+        payload = {}
+        headers = {}
+
+        response = requests.request("GET", url, headers=headers, data=payload)
+
+        if response.status_code == 200:
+            return response.json().get("plain_text")
+        else:
+            return ""
+
+    async def get_image(self, url):
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return base64.b64encode(response.content).decode('utf-8')
+            else:
+                return ""
+        except Exception as error:
+            return url
+
+    async def send_seller_information(self, message):
+        information = self.get_seller_information()
+        response = await self.model.generate_seller_information(information)
+        await send_message_fetch(response, message["from"])
+
+    def get_seller_information(self):
+        url = "https://api.mercadolibre.com/users/me"
+
+        payload = ""
+        headers = {
+            'Authorization': 'Bearer APP_USR-1293961224444856-120203-e5c3d5a9676b0986078d4e2486fcd073-712867753'
+        }
+
+        response = requests.request("GET", url, headers=headers, data=payload)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"data": "No se pudo obtener la información del vendedor"}

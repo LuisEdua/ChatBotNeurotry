@@ -3,12 +3,10 @@ import httpx
 import json
 from typing import Any
 
-async def send_login_fetch(to: str) -> Any:
+
+async def send_catalog_admin_fetch(to: str, data: Any) -> httpx.Response:
     url = os.getenv('FACEBOOK_API_URL')
     token = os.getenv('FACEBOOK_API_TOKEN')
-
-    if not url or not token:
-        raise ValueError("FACEBOOK_API_URL or FACEBOOK_API_TOKEN environment variables are not set")
 
     headers = {
         "Content-Type": "application/json",
@@ -24,10 +22,10 @@ async def send_login_fetch(to: str) -> Any:
             "type": "flow",
             "header": {
                 "type": "text",
-                "text": "Iniciar sesión",
+                "text": "Publicaciones",
             },
             "body": {
-                "text": "Para continuar inicia sesión.",
+                "text": "Lista de tus publicaciones en Mercado libre.",
             },
             "footer": {
                 "text": "Not shown in draft mode",
@@ -38,14 +36,12 @@ async def send_login_fetch(to: str) -> Any:
                     "flow_message_version": "3",
                     "flow_action": "navigate",
                     "flow_token": "<FLOW_TOKEN>",
-                    "flow_id": "896736075900601",
-                    "flow_cta": "Enviar",
-                    "mode": "draft",
+                    "flow_id": "1705368093531970",
+                    "flow_cta": "Finalizar",
+                    "mode": "published",
                     "flow_action_payload": {
-                        "screen": "loginstore",
-                        "data": {
-                            "customvalue": "<CUSTOM_VALUE>",
-                        },
+                        "screen": "CATALOG",
+                        "data": data
                     },
                 },
             },
@@ -54,9 +50,5 @@ async def send_login_fetch(to: str) -> Any:
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, data=json.dumps(body))
-        response_data = response.json()
-
-        if response.status_code != 200:
-            raise Exception(f"Error {response.status_code}: {response_data}")
-
-        return response_data
+        print(response.json())
+        return response

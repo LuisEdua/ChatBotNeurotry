@@ -23,26 +23,6 @@ class MessageDto(BaseModel):
     text: dict = Field()
     type: str = Field()
 
-    @field_validator('from_')
-    def validate_from(cls, v):
-        if not re.match(r'^\d{1,15}$', v):
-            raise ValueError('Invalid phone number format.')
-        return v
-
-    @field_validator('timestamp')
-    def validate_timestamp(cls, v):
-        if not re.match(r'^\d+$', v):
-            raise ValueError('Invalid timestamp format.')
-        return v
-
-    @field_validator('type')
-    def validate_type(cls, v):
-        if v not in ['text', 'image', 'video', 'audio', 'interactive']:
-            raise ValueError('Invalid message type.')
-        return v
-
-    text: constr(strip_whitespace=True, min_length=1)
-
 class WhatsappController:
     def __init__(self, model, cloudinary_service: CloudinaryService, encryptation_service: EncryptationService):
         self.whatsapp_service = WhatsappService(model, encryptation_service, cloudinary_service)
@@ -50,13 +30,31 @@ class WhatsappController:
     async def handle_message(self):
         message_dto = request.get_json()
         try:
-            message = message_dto["entry"][0]["changes"][0]["value"]["messages"][0]
+            entry = message_dto.get("entry", None)
+            if not entry:
+                return jsonify({"status": "Bad Request"}), 400
+            changes = entry[0].get("changes", None)
+            if not changes:
+                return jsonify({"status": "Bad Request"}), 400
+            statuses = changes[0].get("statuses", None)
+            if statuses:
+                if statuses[0].get("status", None) == "read":
+                    return jsonify({"status": "EVENT_RECEIVED"}), 200
+                else:
+                    return jsonify({"status": "Bad Request"}), 400
+            message = changes[0]["value"]["messages"][0]
 
             await self.whatsapp_service.handle_message(message)
 
             return jsonify({"status": "EVENT_RECEIVED"}), 200
-        except (KeyError, ValidationError):
+        except (KeyError, ValidationError) as e:
+            if isinstance(e, ValidationError):
+                print(f"=======> Validation Error: {e.errors()}")  # Usa la instancia de error
+            else:
+                print("=======> Key Error: A key was not found.")
             return jsonify({"status": "Bad Request"}), 400
+        except Exception as e:
+            return jsonify({"status": "Internal Server Error"}), 500
 
     def validate_message(self, message: Dict[str, Any]) -> MessageDto:
         # Extraer y limpiar campos relevantes
