@@ -48,7 +48,9 @@ async def send_registration_fetch(to: str) -> Any:
             },
         },
     }
+    print(
 
+    )
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, data=json.dumps(body))
         return response.json()

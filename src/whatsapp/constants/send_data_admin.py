@@ -37,7 +37,7 @@ async def send_catalog_admin_fetch(to: str, data: Any) -> httpx.Response:
                     "flow_action": "navigate",
                     "flow_token": "<FLOW_TOKEN>",
                     "flow_id": "1705368093531970",
-                    "flow_cta": "Finalizar",
+                    "flow_cta": "Ver mis publicaciones",
                     "mode": "published",
                     "flow_action_payload": {
                         "screen": "CATALOG",

@@ -25,6 +25,7 @@ async def send_message_fetch(message: str, to: str, preview_url: bool = False) -
             "body": message,
         },
     }
+    print(body)
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, data=json.dumps(body))

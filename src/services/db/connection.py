@@ -39,6 +39,7 @@ class User(Base):
     password = Column(String)
     phone = Column(String, unique=True)
     flows = relationship('Flow', back_populates='user')
+    admin = Column(Boolean, default=False)
     createdAt = Column(DateTime, default=func.now())
     updatedAt = Column(DateTime, onupdate=func.now())
 
